@@ -22,6 +22,12 @@ const FIELD_LABELS: Record<MatterField, TranslationKey> = {
 
 /** Import matters from a CSV file or rows pasted from Excel, with column mapping and preview. */
 export function ImportDialog({ open, onClose }: { open: boolean; onClose(): void }) {
+  // Fresh state for every opening; see MatterEditorDialog.
+  return open ? <ImportForm onClose={onClose} /> : null;
+}
+
+function ImportForm({ onClose }: { onClose(): void }) {
+  const open = true;
   const { t } = useI18n();
   const importMatters = useApp((s) => s.importMatters);
   const [text, setText] = useState('');
@@ -29,14 +35,6 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose(): void
   const [mapping, setMapping] = useState<Record<MatterField, number> | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (open) {
-      setText('');
-      setMapping(null);
-      setHasHeader(true);
-    }
-  }, [open]);
 
   const rows = useMemo(() => (text.trim() ? parseCsv(text) : []), [text]);
   const columnCount = rows.reduce((max, r) => Math.max(max, r.length), 0);

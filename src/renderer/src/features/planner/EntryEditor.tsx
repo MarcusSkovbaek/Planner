@@ -30,9 +30,16 @@ export function EntryEditor({ data }: { data: PlannerData }) {
   if (entry) last.current = entry;
   const shown = entry ?? last.current;
 
+  const asideRef = useRef<HTMLElement>(null);
+  const open = !!entry;
+  // A closing panel must not keep keyboard focus, or global shortcuts stop working.
+  useEffect(() => {
+    if (!open && asideRef.current?.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+  }, [open]);
+
   return (
-    <aside className={cx('editor', entry && 'open')} aria-hidden={!entry} data-testid="entry-editor">
-      <div className="editor-inner">{shown && <EditorContent key={shown.id} entry={shown} data={data} visible={!!entry} />}</div>
+    <aside ref={asideRef} className={cx('editor', open && 'open')} aria-hidden={!open} inert={!open} data-testid="entry-editor">
+      <div className="editor-inner">{shown && <EditorContent key={shown.id} entry={shown} data={data} visible={open} />}</div>
     </aside>
   );
 }
@@ -69,10 +76,13 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
   useEffect(() => () => flushNarrative(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus the narrative of freshly created entries so the user can type right away.
+  // Done on the next frame (not after the slide-in) so focus never jumps unexpectedly.
   useEffect(() => {
     if (visible && Date.now() - entry.createdAt < 2500 && !locked) {
-      const timer = setTimeout(() => narrativeRef.current?.focus(), 220);
-      return () => clearTimeout(timer);
+      const frame = requestAnimationFrame(() => {
+        if (usePlanner.getState().editingId === entry.id) narrativeRef.current?.focus({ preventScroll: true });
+      });
+      return () => cancelAnimationFrame(frame);
     }
     return undefined;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -87,33 +97,42 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
     setHoursText(hoursValue(entry.endMin - entry.startMin));
   }, [entry.startMin, entry.endMin, hoursValue]);
 
+  /** The newest version of this entry. Edits made in quick succession must build on each
+   *  other, even before React has re-rendered with the previous one. */
+  const latest = () => usePlanner.getState().entries.find((e) => e.id === entry.id) ?? entry;
+
   const commitTimes = (startMin: number, endMin: number) => {
+    const current = latest();
     const start = clamp(Math.round(startMin), 0, MINUTES_PER_DAY - inc);
     const end = clamp(Math.round(endMin), start + 1, MINUTES_PER_DAY);
-    if (start !== entry.startMin || end !== entry.endMin) void updateEntry(entry.id, { startMin: start, endMin: end }, { undoable: true });
+    if (start !== current.startMin || end !== current.endMin) void updateEntry(entry.id, { startMin: start, endMin: end }, { undoable: true });
     else {
-      setStartText(formatClock(entry.startMin));
-      setEndText(formatClock(entry.endMin));
-      setHoursText(hoursValue(minutes));
+      setStartText(formatClock(current.startMin));
+      setEndText(formatClock(current.endMin));
+      setHoursText(hoursValue(current.endMin - current.startMin));
     }
   };
 
   const commitStart = () => {
+    const current = latest();
+    const length = current.endMin - current.startMin;
     const parsed = parseClock(startText);
-    if (parsed === null) return setStartText(formatClock(entry.startMin));
-    const start = Math.min(parsed, MINUTES_PER_DAY - minutes);
-    commitTimes(start, start + minutes);
+    if (parsed === null) return setStartText(formatClock(current.startMin));
+    const start = Math.min(parsed, MINUTES_PER_DAY - length);
+    commitTimes(start, start + length);
   };
   const commitEnd = () => {
+    const current = latest();
     const parsed = parseClock(endText);
-    if (parsed === null || parsed <= entry.startMin) return setEndText(formatClock(entry.endMin));
-    commitTimes(entry.startMin, entry.startMin + Math.max(inc, snapMinutes(parsed - entry.startMin, inc, 'round')));
+    if (parsed === null || parsed <= current.startMin) return setEndText(formatClock(current.endMin));
+    commitTimes(current.startMin, current.startMin + Math.max(inc, snapMinutes(parsed - current.startMin, inc, 'round')));
   };
   const commitHours = () => {
+    const current = latest();
     const h = parseHoursInput(hoursText);
-    if (h === null || h <= 0) return setHoursText(hoursValue(minutes));
+    if (h === null || h <= 0) return setHoursText(hoursValue(current.endMin - current.startMin));
     const length = Math.max(inc, snapMinutes(h * 60, inc, 'round'));
-    commitTimes(entry.startMin, entry.startMin + length);
+    commitTimes(current.startMin, current.startMin + length);
   };
   const onEnter = (commit: () => void) => (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -315,7 +334,7 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
                       icon={<Link2Off />}
                       onClick={() => {
                         const remove = new Set(s.segmentIds);
-                        void updateEntry(entry.id, { activityIds: entry.activityIds.filter((id) => !remove.has(id)) }, { undoable: true });
+                        void updateEntry(entry.id, { activityIds: latest().activityIds.filter((id) => !remove.has(id)) }, { undoable: true });
                       }}
                     />
                   )}

@@ -1,5 +1,5 @@
 import './matters.css';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Archive, ArchiveRestore, Check, Trash2, X } from 'lucide-react';
 import { apiErrorCode, ApiErrorCode } from '@core/api';
 import { BILLING_TYPES, MATTER_COLOR_COUNT, type BillingType, type Matter } from '@core/model';
@@ -18,7 +18,14 @@ interface MatterEditorDialogProps {
   onSaved?(matter: Matter): void;
 }
 
-export function MatterEditorDialog({ open, matter, onClose, onSaved }: MatterEditorDialogProps) {
+export function MatterEditorDialog(props: MatterEditorDialogProps) {
+  // Mount the form only while open, so its state starts fresh for every opening
+  // (resetting it in an effect could swallow the first keystrokes).
+  if (!props.open) return null;
+  return <MatterEditorForm key={props.matter?.id ?? 'new'} {...props} />;
+}
+
+function MatterEditorForm({ open, matter, onClose, onSaved }: MatterEditorDialogProps) {
   const { t } = useI18n();
   const matters = useApp((s) => s.matters);
   const saveMatter = useApp((s) => s.saveMatter);
@@ -27,15 +34,6 @@ export function MatterEditorDialog({ open, matter, onClose, onSaved }: MatterEdi
   const [keyword, setKeyword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setForm(toForm(matter, matters.length));
-      setKeyword('');
-      setError(null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, matter]);
 
   const set = <K extends keyof ReturnType<typeof toForm>>(key: K, value: ReturnType<typeof toForm>[K]) => setForm((f) => ({ ...f, [key]: value }));
 
