@@ -220,13 +220,16 @@ export const usePlanner = create<PlannerState>((set, get) => {
     async deleteEntries(ids) {
       const victims = get().entries.filter((e) => ids.includes(e.id));
       if (!victims.length) return;
+      // Optimistic: the entries disappear at once, so the undo step must exist at once too.
       upsertEntries([], ids);
+      const item: UndoItem = { label: 'delete', actions: [{ kind: 'restore', entries: victims }] };
+      set({ undoStack: [...get().undoStack.slice(-(MAX_UNDO - 1)), item] });
+      const t = currentT();
+      undoToast(victims.length === 1 ? t('toast.entryDeleted') : t('toast.entriesDeleted', { n: victims.length }));
       try {
         await api().deleteEntries(ids);
-        pushUndo('delete', [{ kind: 'restore', entries: victims }]);
-        const t = currentT();
-        undoToast(victims.length === 1 ? t('toast.entryDeleted') : t('toast.entriesDeleted', { n: victims.length }));
       } catch (err) {
+        set({ undoStack: get().undoStack.filter((u) => u !== item) });
         upsertEntries(victims);
         reportError(err);
       }

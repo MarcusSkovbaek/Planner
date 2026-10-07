@@ -21,9 +21,10 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } }],
   webServer: {
-    command: 'npm run build:web && npm run preview:web',
+    // Always build fresh; never reuse a server that might serve an outdated build.
+    command: 'npx vite build --config vite.web.config.mts && npx vite preview --config vite.web.config.mts --port 4173 --strictPort',
     url: 'http://localhost:4173',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 180_000,
   },
 });

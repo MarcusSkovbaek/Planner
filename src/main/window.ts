@@ -1,4 +1,5 @@
-import { app, BrowserWindow, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, nativeTheme, screen, shell, type Rectangle } from 'electron';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const TITLE_BAR_HEIGHT = 48;
@@ -10,12 +11,56 @@ export function titleBarColors(dark: boolean) {
     : { color: '#f4f4f7', symbolColor: '#3b3c45', background: '#f7f7f9' };
 }
 
+interface WindowState {
+  bounds: Rectangle;
+  maximized: boolean;
+}
+
+const stateFile = () => join(app.getPath('userData'), 'window-state.json');
+
+/** Restores the last window position if it is still (mostly) on a connected display. */
+function loadWindowState(): WindowState | null {
+  try {
+    const state = JSON.parse(readFileSync(stateFile(), 'utf8')) as WindowState;
+    const { x, y, width, height } = state.bounds;
+    if (![x, y, width, height].every(Number.isFinite) || width < 600 || height < 400) return null;
+    const area = screen.getDisplayMatching(state.bounds).workArea;
+    const visibleWidth = Math.min(x + width, area.x + area.width) - Math.max(x, area.x);
+    const visibleHeight = Math.min(y + height, area.y + area.height) - Math.max(y, area.y);
+    return visibleWidth >= 200 && visibleHeight >= 100 ? state : null;
+  } catch {
+    return null;
+  }
+}
+
+function trackWindowState(win: BrowserWindow): void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const save = () => {
+    if (win.isDestroyed() || win.isMinimized()) return;
+    const state: WindowState = { bounds: win.isMaximized() ? win.getNormalBounds() : win.getBounds(), maximized: win.isMaximized() };
+    try {
+      writeFileSync(stateFile(), JSON.stringify(state));
+    } catch {
+      // Not important enough to bother the user.
+    }
+  };
+  const schedule = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(save, 500);
+  };
+  win.on('resize', schedule);
+  win.on('move', schedule);
+  win.on('close', save);
+}
+
 export function createMainWindow(options: { show: boolean; iconPath?: string }): BrowserWindow {
   const dark = nativeTheme.shouldUseDarkColors;
   const colors = titleBarColors(dark);
+  const saved = loadWindowState();
   const win = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width: saved?.bounds.width ?? 1440,
+    height: saved?.bounds.height ?? 900,
+    ...(saved ? { x: saved.bounds.x, y: saved.bounds.y } : {}),
     minWidth: 1040,
     minHeight: 660,
     show: false,
@@ -36,8 +81,10 @@ export function createMainWindow(options: { show: boolean; iconPath?: string }):
   });
 
   win.once('ready-to-show', () => {
+    if (saved?.maximized) win.maximize();
     if (options.show) win.show();
   });
+  trackWindowState(win);
 
   // The renderer is a local app: never navigate away or open new windows inside it.
   win.webContents.setWindowOpenHandler(({ url }) => {

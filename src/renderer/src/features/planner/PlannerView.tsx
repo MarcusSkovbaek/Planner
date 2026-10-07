@@ -1,9 +1,11 @@
 import './planner.css';
+import { useEffect, useRef } from 'react';
 import { HOUR_HEIGHT_OPTIONS } from '@core/settings';
 import { dateKeyOf, minuteOfDay } from '@core/time';
 import { useApp } from '@/state/app';
 import { usePlanner } from '@/state/planner';
 import { useHotkeys } from '@/lib/hotkeys';
+import { useNow } from '@/lib/useNow';
 import { Board } from './Board';
 import { EntryEditor } from './EntryEditor';
 import { PlannerToolbar } from './PlannerToolbar';
@@ -15,6 +17,18 @@ import { usePlannerData } from './usePlannerData';
 export function PlannerView({ active }: { active: boolean }) {
   const data = usePlannerData();
   const editing = usePlanner((s) => s.editingId !== null && data.dayEntries.some((e) => e.id === s.editingId));
+
+  // Follow the calendar: if "today" is shown when the clock passes midnight, move on to
+  // the new day (unless the user is in the middle of editing).
+  const now = useNow(60_000);
+  const lastToday = useRef(dateKeyOf(now));
+  useEffect(() => {
+    const today = dateKeyOf(now);
+    if (today === lastToday.current) return;
+    const { date, editingId, setDate } = usePlanner.getState();
+    if (date === lastToday.current && !editingId) void setDate(today);
+    lastToday.current = today;
+  }, [now]);
 
   useHotkeys(
     {
