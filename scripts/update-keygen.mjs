@@ -11,7 +11,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateKeyPair } from './lib/update-signing.mjs';
 
@@ -20,7 +20,9 @@ const args = process.argv.slice(2);
 const outIndex = args.indexOf('--out');
 const out = resolve(outIndex >= 0 ? args[outIndex + 1] : join(homedir(), '.planner-signing', 'planner-update-signing-key.pem'));
 
-if (!relative(root, out).startsWith('..')) {
+// Inside the repo = a relative path that does not climb out (other drives give an absolute path).
+const fromRoot = relative(root, out);
+if (!fromRoot.startsWith('..') && !isAbsolute(fromRoot)) {
   console.error(`✖ Refusing to write the private key inside the repository (${out}).`);
   process.exit(1);
 }
