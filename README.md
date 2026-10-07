@@ -11,7 +11,7 @@ Planner holder automatisk øje med, hvilke programmer, dokumenter, e-mails og br
 - **Træk og slip**: Træk en opfanget blok over i registreringerne, eller klik og træk i tidslinjen for at oprette en registrering. Registreringer kan flyttes og trækkes længere eller kortere. Alt afrundes til din tidsenhed (standard 6 min = 0,1 t).
 - **Intelligente sagsforslag** ud fra dokumentnavne, e-mailemner, sagsnumre og nøgleord.
 - **Editor-panel** med autosave, sagsvælger med søgning, beskrivelse, tider, type (fakturerbar / ikke-fakturerbar / forretningsudvikling) og tilknyttet opfanget tid.
-- **Frigivelse og låsning** af registreringer. Frigivelse kræver en sag. **Fortryd** (Ctrl+Z) virker på alle handlinger.
+- **Frigivelse og låsning** af registreringer. Frigivelse kræver en sag. **Fortryd** (Ctrl+Z) virker på oprettelse, sletning, flytning, ændring af tider og dato, frigivelse og genåbning.
 - **Ugeoversigt og mål**: timer pr. dag i værktøjslinjen samt dagens fremdrift mod dit mål. Nederst vises nøgletal som i Intapp: ikke frigivet, frigivet, konverteret, opfanget, fakturerbar og så videre.
 - **Liste** pr. uge eller måned med filtre, massefrigivelse og **CSV-eksport** til Excel eller jeres tidssystem.
 - **Sager**: opret, rediger og arkivér sager, eller **importér fra CSV eller direkte fra Excel** (kopiér og indsæt) med automatisk kolonnegenkendelse.
