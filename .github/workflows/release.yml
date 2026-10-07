@@ -2,51 +2,73 @@ name: Release
 
 # Publishes a signed update. Push a tag that matches package.json, e.g.:
 #   npm version patch && git push --follow-tags
+#
+# The signing key is kept away from third-party code: the build (npm packages, tests,
+# packaging) runs without it, and only the publish job gets it, after you approve the
+# run in the protected `release` environment. That job installs no npm packages; besides
+# GitHub's own checkout/setup/download actions it runs only this repository's signing
+# script, which uses Node built-ins only.
 on:
   push:
     tags: ['v*.*.*']
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
-    name: Build, sign and publish (Windows)
-    runs-on: windows-latest
-    # Store PLANNER_UPDATE_SIGNING_KEY as a secret of this environment and protect it
-    # with required reviewers, so no release can be signed without your approval.
-    environment: release
-    timeout-minutes: 40
+  verify:
+    name: Check tag and signing key
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
         with:
-          node-version: 22
-          cache: npm
+          persist-credentials: false
       - name: Tag must match package.json
-        shell: bash
         run: |
           version="$(node -p "require('./package.json').version")"
           if [ "v$version" != "$GITHUB_REF_NAME" ]; then
             echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
             exit 1
           fi
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
-      - name: Package installer
-        run: npx electron-builder --win --x64 --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - name: Smoke test the packaged app
-        shell: pwsh
+      - name: The app must trust an update key
         run: |
-          $report = Join-Path $env:RUNNER_TEMP 'smoke.json'
-          $p = Start-Process -FilePath 'release/win-unpacked/Planner.exe' -ArgumentList "--smoke-test=$report" -PassThru -Wait
-          Get-Content $report
-          if ($p.ExitCode -ne 0) { throw "Smoke test failed with exit code $($p.ExitCode)" }
-      - name: Sign the update (refuses without a trusted key)
-        shell: bash
+          if ! grep -Eq "id: '[0-9a-f]{16}'" src/main/update/trustedKeys.ts; then
+            echo "::error::src/main/update/trustedKeys.ts has no key, so installed apps could not verify this update. Run npm run update:keygen first (see README)."
+            exit 1
+          fi
+
+  build:
+    name: Windows
+    needs: verify
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      npm-cache: false
+
+  publish:
+    name: Sign and publish
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # PLANNER_UPDATE_SIGNING_KEY is a secret of this environment. Protect it with required
+    # reviewers so no update can be signed without your approval.
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      # Fails if the file differs from what the build job uploaded.
+      - uses: actions/download-artifact@v8
+        with:
+          name: Planner-Windows-installer
+          path: release
+      - name: Sign the update (refuses keys the app does not trust)
         env:
           PLANNER_UPDATE_SIGNING_KEY: ${{ secrets.PLANNER_UPDATE_SIGNING_KEY }}
         run: |
@@ -54,12 +76,13 @@ jobs:
             --installer "release/Planner-Setup-${GITHUB_REF_NAME#v}.exe" \
             --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
       - name: Publish GitHub release
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             "release/Planner-Setup-${GITHUB_REF_NAME#v}.exe" \
             release/update.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
             --title "Planner ${GITHUB_REF_NAME#v}" \
             --generate-notes

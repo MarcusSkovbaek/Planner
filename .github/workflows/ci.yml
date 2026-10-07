@@ -10,14 +10,20 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# CI runs third-party npm code, so it gets read-only access and no secrets.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Typecheck, unit & end-to-end tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -31,7 +37,7 @@ jobs:
           npm run build
           xvfb-run -a npx electron . --no-sandbox --demo --smoke-test=smoke-linux.json
           cat smoke-linux.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -39,36 +45,5 @@ jobs:
           retention-days: 7
 
   windows:
-    name: Windows installer & smoke test
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      # Includes a test that samples the real foreground window through user32.
-      - run: npm test
-      - run: npm run build
-      - name: Package installer
-        run: npx electron-builder --win --x64 --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - name: Smoke test the packaged app (native Win32 capture, storage, IPC, UI)
-        shell: pwsh
-        run: |
-          $report = Join-Path $env:RUNNER_TEMP 'smoke.json'
-          $p = Start-Process -FilePath 'release/win-unpacked/Planner.exe' -ArgumentList "--smoke-test=$report" -PassThru -Wait
-          Get-Content $report
-          if ($p.ExitCode -ne 0) { throw "Smoke test failed with exit code $($p.ExitCode)" }
-          $r = Get-Content $report | ConvertFrom-Json
-          if ($r.provider -ne 'win32') { throw "Expected the native Win32 provider, got '$($r.provider)'" }
-          if (-not $r.networkBlocked) { throw 'The user interface could reach the internet' }
-          if (-not $r.networkControlReachable) { Write-Warning 'Network control probe failed; the block could not be cross-checked' }
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Planner-Windows-installer
-          path: release/Planner-Setup-*.exe
-          retention-days: 30
+    name: Windows
+    uses: ./.github/workflows/build-windows.yml

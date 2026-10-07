@@ -53,7 +53,8 @@ console.log(`
 
 Next steps
   1. Commit and push src/main/update/trustedKeys.ts.
-  2. Store the private key as an environment secret so the release workflow can sign:
+  2. Create the "release" environment with required reviewers and a v*.*.* tag rule
+     (see README), then store the private key in it so only approved releases can sign:
        gh secret set PLANNER_UPDATE_SIGNING_KEY --env release < "${out}"
      (or GitHub → Settings → Environments → release → Add secret)
   3. Back up the private key offline. Without it you cannot publish updates to

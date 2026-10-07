@@ -1,0 +1,55 @@
+name: Build Windows installer
+
+# Shared by CI (every push) and Release (tags), so a release is built exactly the way CI
+# tests it. This job runs third-party npm code, so it gets read-only access and never
+# sees the update signing key.
+on:
+  workflow_call:
+    inputs:
+      npm-cache:
+        description: Restore the npm download cache. Releases turn it off and install from the registry only.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Installer & smoke test
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: ${{ inputs.npm-cache && 'npm' || '' }}
+          package-manager-cache: false
+      - run: npm ci
+      # Includes a test that samples the real foreground window through user32.
+      - run: npm test
+      - run: npm run build
+      - name: Package installer
+        run: npx electron-builder --win --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Smoke test the packaged app (native Win32 capture, storage, IPC, UI)
+        shell: pwsh
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP 'smoke.json'
+          $p = Start-Process -FilePath 'release/win-unpacked/Planner.exe' -ArgumentList "--smoke-test=$report" -PassThru -Wait
+          Get-Content $report
+          if ($p.ExitCode -ne 0) { throw "Smoke test failed with exit code $($p.ExitCode)" }
+          $r = Get-Content $report | ConvertFrom-Json
+          if ($r.provider -ne 'win32') { throw "Expected the native Win32 provider, got '$($r.provider)'" }
+          if (-not $r.networkBlocked) { throw 'The user interface could reach the internet' }
+          if (-not $r.networkControlReachable) { Write-Warning 'Network control probe failed; the block could not be cross-checked' }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Planner-Windows-installer
+          path: release/Planner-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 30

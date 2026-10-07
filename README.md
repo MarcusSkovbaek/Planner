@@ -71,7 +71,7 @@ git add src/main/update/trustedKeys.ts && git commit -m "Add update signing key"
 
 Læg den private nøgle som hemmelighed i et beskyttet GitHub-miljø, så udgivelser kun kan signeres med din godkendelse:
 
-1. GitHub → **Settings → Environments → New environment** → `release`. Tilføj dig selv under **Required reviewers**.
+1. GitHub → **Settings → Environments → New environment** → `release`. Tilføj dig selv under **Required reviewers**. Vælg under **Deployment branches and tags** _Selected branches and tags_, og tilføj reglen `v*.*.*` af typen _Tag_, så kun versions-tags kan bruge miljøet.
 2. Tilføj hemmeligheden `PLANNER_UPDATE_SIGNING_KEY` i miljøet med indholdet af den `.pem`-fil, som `update:keygen` har lavet (eller kør `gh secret set PLANNER_UPDATE_SIGNING_KEY --env release < sti/til/nøgle.pem`).
 3. Gem en kopi af nøglen offline, for eksempel i en password manager.
 
@@ -84,7 +84,13 @@ npm version patch            # eller minor/major – opretter tag v1.0.1
 git push --follow-tags
 ```
 
-Workflowet **Release** bygger og tester installationen, kører en røgtest på Windows, signerer manifestet og udgiver det hele på GitHub Releases. Installerede kopier finder opdateringen inden for få timer. Brugeren kan også vælge _Søg efter opdateringer_ under Indstillinger.
+Workflowet **Release** kører i tre trin:
+
+1. **Kontrol**: Tagget skal passe med versionen i `package.json`, og appen skal have en betroet nøgle.
+2. **Byg**: Installationen bygges og testes på Windows præcis som i CI, inklusive røgtesten. Jobbet har ikke adgang til nøglen.
+3. **Signér og udgiv**: Når du har godkendt kørslen under _Actions_, signeres manifestet, og installationen udgives på GitHub Releases. Nøglen bruges kun i dette job. Det installerer ingen npm-pakker, og ud over GitHubs egne standardhandlinger kører det kun projektets eget signeringsscript, så en kompromitteret npm-pakke ikke kan få fat i nøglen.
+
+Installerede kopier finder opdateringen inden for få timer. Brugeren kan også vælge _Søg efter opdateringer_ under Indstillinger.
 
 **Nøglerotation:** Tilføj den nye nøgle i `trustedKeys.ts`, udgiv én version signeret med den gamle nøgle, og fjern derefter den gamle. Mister du den private nøgle, skal brugerne installere en ny version manuelt én gang.
 
