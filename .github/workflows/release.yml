@@ -18,7 +18,7 @@ permissions:
 jobs:
   verify:
     name: Check tag and signing key
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
@@ -48,7 +48,7 @@ jobs:
   publish:
     name: Sign and publish
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     # PLANNER_UPDATE_SIGNING_KEY is a secret of this environment. Protect it with required
     # reviewers so no update can be signed without your approval.
