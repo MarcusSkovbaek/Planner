@@ -1,0 +1,190 @@
+/*
+ * Design tokens. Every colour used by the UI is defined here, once for light and once
+ * for dark mode, so components never hard-code colours.
+ */
+:root {
+  --font-sans: 'Inter Variable', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Cascadia Mono', 'SF Mono', Consolas, ui-monospace, monospace;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --titlebar-h: 48px;
+  --toolbar-h: 60px;
+  --summary-h: 64px;
+  --gutter-w: 60px;
+  --drawer-w: 400px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 280ms;
+
+  color-scheme: light;
+
+  --bg: #f7f7f9;
+  --titlebar-bg: #f4f4f7;
+  --surface: #ffffff;
+  --surface-2: #fbfbfc;
+  --surface-sunken: #f3f3f6;
+  --surface-hover: #f1f1f5;
+  --surface-active: #e9e9ef;
+  --overlay: rgba(14, 14, 20, 0.32);
+  --border: #e7e7ec;
+  --border-subtle: #efeff3;
+  --border-strong: #d6d6de;
+  --grid-hour: #ececf1;
+  --grid-half: #f5f5f8;
+  --offhours: rgba(16, 16, 32, 0.022);
+
+  --text: #15151c;
+  --text-2: #4b4b58;
+  --text-3: #7c7c8b;
+  --text-4: #a9a9b6;
+  --text-on-accent: #ffffff;
+
+  --accent: #5b5bd6;
+  --accent-hover: #5151cd;
+  --accent-active: #4747c2;
+  --accent-soft: rgba(91, 91, 214, 0.1);
+  --accent-soft-2: rgba(91, 91, 214, 0.18);
+  --accent-text: #4646b8;
+  --focus-ring: 0 0 0 3px rgba(91, 91, 214, 0.28);
+
+  --danger: #dc3e42;
+  --danger-soft: rgba(220, 62, 66, 0.1);
+  --danger-text: #c62a2f;
+  --success: #2b9a66;
+  --success-soft: rgba(43, 154, 102, 0.12);
+  --success-text: #1f7a50;
+  --warning: #e8930c;
+  --warning-soft: rgba(232, 147, 12, 0.13);
+  --warning-text: #a35f00;
+
+  /* Footer metrics, mirroring the Intapp Planner colour language. */
+  --m-unreleased: #f08c00;
+  --m-released: #2b9a66;
+  --m-converted: #12715b;
+  --m-captured: #8b8d98;
+  --m-billable: #3e63dd;
+  --m-nonbillable: #0d9488;
+  --m-bd: #8e4ec6;
+
+  --shadow-xs: 0 1px 1px rgba(16, 16, 28, 0.04);
+  --shadow-sm: 0 1px 2px rgba(16, 16, 28, 0.06), 0 1px 1px rgba(16, 16, 28, 0.03);
+  --shadow-md: 0 6px 16px -6px rgba(16, 16, 28, 0.14), 0 2px 5px -2px rgba(16, 16, 28, 0.08);
+  --shadow-lg: 0 24px 48px -12px rgba(16, 16, 28, 0.22), 0 6px 16px -6px rgba(16, 16, 28, 0.1);
+  --shadow-drag: 0 18px 40px -10px rgba(16, 16, 28, 0.32), 0 4px 10px rgba(16, 16, 28, 0.12);
+
+  /* Activity kind palette (OKLCH: shared lightness/chroma, distinct hues). */
+  --kind-l-bg: 96.2%;
+  --kind-c-bg: 0.032;
+  --kind-l-accent: 63%;
+  --kind-c-accent: 0.15;
+  --kind-l-text: 36%;
+  --kind-c-text: 0.085;
+  --kind-l-border: 89%;
+  --kind-c-border: 0.06;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0e0f12;
+  --titlebar-bg: #121317;
+  --surface: #16171b;
+  --surface-2: #191a1f;
+  --surface-sunken: #121317;
+  --surface-hover: #1f2026;
+  --surface-active: #26272e;
+  --overlay: rgba(0, 0, 0, 0.55);
+  --border: #26272e;
+  --border-subtle: #1f2026;
+  --border-strong: #34353e;
+  --grid-hour: #222329;
+  --grid-half: #1b1c21;
+  --offhours: rgba(0, 0, 0, 0.18);
+
+  --text: #ededf2;
+  --text-2: #b9bac6;
+  --text-3: #8a8b99;
+  --text-4: #5e5f6c;
+
+  --accent: #7070ec;
+  --accent-hover: #7d7df0;
+  --accent-active: #8a8af3;
+  --accent-soft: rgba(112, 112, 236, 0.16);
+  --accent-soft-2: rgba(112, 112, 236, 0.26);
+  --accent-text: #a5a5ff;
+  --focus-ring: 0 0 0 3px rgba(112, 112, 236, 0.4);
+
+  --danger: #ec5d5e;
+  --danger-soft: rgba(236, 93, 94, 0.15);
+  --danger-text: #ff8f8d;
+  --success: #3dd68c;
+  --success-soft: rgba(61, 214, 140, 0.14);
+  --success-text: #4cc38a;
+  --warning: #ffb224;
+  --warning-soft: rgba(255, 178, 36, 0.14);
+  --warning-text: #f1a10d;
+
+  --m-unreleased: #ffa94d;
+  --m-released: #3dd68c;
+  --m-converted: #2fbf9e;
+  --m-captured: #8a8b99;
+  --m-billable: #6e8ef5;
+  --m-nonbillable: #2dd4bf;
+  --m-bd: #b48ef0;
+
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 20px -6px rgba(0, 0, 0, 0.55), 0 2px 6px -2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 24px 56px -12px rgba(0, 0, 0, 0.7), 0 8px 18px -6px rgba(0, 0, 0, 0.45);
+  --shadow-drag: 0 22px 48px -10px rgba(0, 0, 0, 0.75), 0 6px 14px rgba(0, 0, 0, 0.45);
+
+  --kind-l-bg: 27%;
+  --kind-c-bg: 0.045;
+  --kind-l-accent: 70%;
+  --kind-c-accent: 0.14;
+  --kind-l-text: 91%;
+  --kind-c-text: 0.035;
+  --kind-l-border: 36%;
+  --kind-c-border: 0.06;
+}
+
+/* Hues per activity kind. Grey kinds use zero chroma via --kind-chroma. */
+.kind-document { --kind-h: 255; }
+.kind-spreadsheet { --kind-h: 152; }
+.kind-presentation { --kind-h: 45; }
+.kind-pdf { --kind-h: 22; }
+.kind-email { --kind-h: 85; }
+.kind-calendar { --kind-h: 300; }
+.kind-meeting { --kind-h: 330; }
+.kind-chat { --kind-h: 192; }
+.kind-browser { --kind-h: 232; }
+.kind-files { --kind-h: 265; --kind-chroma: 0.25; }
+.kind-development { --kind-h: 210; }
+.kind-other { --kind-h: 270; --kind-chroma: 0.15; }
+
+[class*='kind-'] {
+  --kind-bg: oklch(var(--kind-l-bg) calc(var(--kind-c-bg) * var(--kind-chroma, 1)) var(--kind-h));
+  --kind-border: oklch(var(--kind-l-border) calc(var(--kind-c-border) * var(--kind-chroma, 1)) var(--kind-h));
+  --kind-accent: oklch(var(--kind-l-accent) calc(var(--kind-c-accent) * var(--kind-chroma, 1)) var(--kind-h));
+  --kind-text: oklch(var(--kind-l-text) calc(var(--kind-c-text) * var(--kind-chroma, 1)) var(--kind-h));
+}
+
+/* Matter colours (index stored on the matter). */
+.matter-c0 { --matter: oklch(60% 0.16 262); }
+.matter-c1 { --matter: oklch(64% 0.15 160); }
+.matter-c2 { --matter: oklch(68% 0.16 55); }
+.matter-c3 { --matter: oklch(60% 0.17 305); }
+.matter-c4 { --matter: oklch(63% 0.12 205); }
+.matter-c5 { --matter: oklch(62% 0.18 15); }
+.matter-c6 { --matter: oklch(66% 0.13 120); }
+.matter-c7 { --matter: oklch(62% 0.15 335); }
+.matter-c8 { --matter: oklch(70% 0.14 85); }
+.matter-c9 { --matter: oklch(55% 0.04 260); }

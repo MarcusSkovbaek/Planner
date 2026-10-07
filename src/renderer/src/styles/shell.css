@@ -1,0 +1,375 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+}
+
+.app-main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.view-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.view-host[hidden] {
+  display: none;
+}
+
+.fatal {
+  margin: 48px auto;
+  max-width: 560px;
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-weight: 500;
+}
+
+/* ── Title bar ───────────────────────────────────────────────────────────── */
+.titlebar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: var(--titlebar-h);
+  flex: none;
+  padding-left: 14px;
+  /* Leave room for the native window controls drawn by Windows. */
+  padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 10px);
+  background: var(--titlebar-bg);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-right: 4px;
+}
+.brand-name {
+  font-weight: 650;
+  font-size: 14px;
+  letter-spacing: -0.015em;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+.nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-3);
+  font-weight: 550;
+  font-size: 13px;
+  transition:
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+.nav-item svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.9;
+}
+.nav-item:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+.nav-item[aria-current='page'] {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow:
+    var(--shadow-sm),
+    inset 0 0 0 1px var(--border);
+}
+:root[data-theme='dark'] .nav-item[aria-current='page'] {
+  background: var(--surface-active);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.titlebar-drag {
+  flex: 1;
+  align-self: stretch;
+}
+
+/* ── Update pill ─────────────────────────────────────────────────────────── */
+.update-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 12px 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  -webkit-app-region: no-drag;
+  animation: pop-in var(--dur-slow) var(--ease-out);
+}
+.update-pill:hover {
+  background: var(--accent-soft-2);
+}
+.update-pill svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ── Tracking indicator ──────────────────────────────────────────────────── */
+.tracking-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 280px;
+  height: 30px;
+  padding: 0 12px 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 550;
+  -webkit-app-region: no-drag;
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
+}
+.tracking-pill:hover,
+.tracking-pill[aria-expanded='true'] {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.tracking-label {
+  color: var(--text);
+}
+.tracking-app {
+  min-width: 0;
+  color: var(--text-3);
+  font-weight: 500;
+}
+.tracking-app::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--text-4);
+}
+
+.tracking-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-4);
+}
+.state-active .tracking-dot {
+  background: var(--success);
+  --pulse-color: var(--success);
+  animation: pulse-dot 2.2s ease-out infinite;
+}
+.state-idle .tracking-dot {
+  background: var(--text-4);
+}
+.state-paused .tracking-dot {
+  background: var(--warning);
+}
+.state-unavailable .tracking-dot {
+  background: var(--danger);
+}
+.state-starting .tracking-dot {
+  background: var(--accent);
+}
+
+.tracking-popover {
+  width: 340px;
+}
+.tp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+}
+.tp-title {
+  font-weight: 650;
+  font-size: 13.5px;
+}
+.tp-state {
+  background: var(--surface-sunken);
+}
+.tp-now {
+  padding: 0 12px 12px;
+}
+.tp-current {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--kind-bg);
+  border: 1px solid var(--kind-border);
+}
+.tp-current-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--kind-accent);
+  box-shadow: var(--shadow-xs);
+}
+.tp-current-icon svg {
+  width: 17px;
+  height: 17px;
+}
+.tp-current-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tp-current-subject {
+  font-weight: 600;
+  color: var(--kind-text);
+}
+.tp-current-meta {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.tp-hint {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  color: var(--text-2);
+  line-height: 1.5;
+}
+.tp-error {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--danger-text);
+  word-break: break-word;
+}
+.tp-actions {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+.tp-actions .btn {
+  margin: 4px 6px;
+}
+.tp-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+}
+.tp-action:hover {
+  background: var(--surface-hover);
+}
+.tp-action svg {
+  width: 15px;
+  height: 15px;
+  color: var(--text-3);
+}
+.tp-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 12px;
+}
+.tp-footer svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+/* ── Shortcuts dialog ────────────────────────────────────────────────────── */
+.shortcuts {
+  display: flex;
+  flex-direction: column;
+}
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.shortcut-row:last-child {
+  border-bottom: none;
+}
+.shortcut-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+/* ── Shared page layout (list, matters, settings) ────────────────────────── */
+.page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.page-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 32px 48px;
+}
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.page-subtitle {
+  margin-top: 2px;
+  color: var(--text-3);
+}
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}

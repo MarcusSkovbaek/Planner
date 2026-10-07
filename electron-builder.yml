@@ -1,0 +1,42 @@
+appId: dk.planner.timetracker
+productName: Planner
+copyright: Copyright © 2026 MarcusSkovbaek
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+  # Ship only the Windows build of the native FFI module.
+  - '!node_modules/koffi/build/koffi/{darwin,freebsd,linux,musl,openbsd}_*/**'
+  - '!node_modules/koffi/build/koffi/win32_{ia32,arm64}/**'
+  - '!node_modules/koffi/{src,vendor,doc,lib}/**'
+  - '!out/.tsc-*/**'
+asarUnpack:
+  - node_modules/koffi/**/*.node
+extraResources:
+  - from: resources
+    to: .
+    filter:
+      - '*.png'
+      - '*.ico'
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+  artifactName: Planner-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Planner
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  deleteAppDataOnUninstall: false
+  language: '1030'
+  multiLanguageInstaller: true
+npmRebuild: false

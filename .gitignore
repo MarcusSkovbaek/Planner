@@ -1,0 +1,17 @@
+node_modules/
+out/
+dist/
+dist-web/
+release/
+test-results/
+playwright-report/
+*.log
+.DS_Store
+.vite/
+coverage/
+
+# Never commit signing keys or local data
+*.pem
+*.key
+.planner-signing/
+smoke*.json

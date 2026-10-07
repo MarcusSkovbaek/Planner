@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "outDir": "node_modules/.cache/tsc/node"
+  },
+  "include": ["src/main/**/*", "src/preload/**/*", "src/core/**/*", "tests/unit/**/*", "*.mts", "package.json"]
+}
