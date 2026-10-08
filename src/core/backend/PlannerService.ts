@@ -66,8 +66,10 @@ const KEYS = {
   activityPrefix: 'activity/',
 };
 
-const ACTIVITY_FLUSH_MS = 10_000;
-const ACTIVITY_FLUSH_ON_CLOSE_MS = 1_500;
+/** How often the day's activity file is rewritten while tracking. Each flush rewrites the whole
+ *  file, so this bounds disk writes; a crash loses at most this much. Quitting, locking and sleep
+ *  flush at once. */
+const ACTIVITY_FLUSH_MS = 30_000;
 const MAX_CACHED_DAYS = 14;
 /** How long a deleted, already closed segment is remembered: long enough for a queued close event. */
 const DELETED_SEGMENT_MEMORY_MS = 10 * 60_000;
@@ -391,6 +393,9 @@ export class PlannerService implements PlannerApi {
   /** For the host: system lock/sleep and resume events. */
   suspendTracking(): void {
     this.tracker?.suspend();
+    // Save at once before the machine locks or sleeps. If the write fails, the day stays dirty
+    // and the next flush or dispose() tries again.
+    void this.flush().catch(() => undefined);
   }
 
   wakeTracking(): void {
@@ -487,7 +492,7 @@ export class PlannerService implements PlannerApi {
         this.knownApps.set(segment.app, segment.appName);
         this.knownAppsDirty = true;
       }
-      this.scheduleFlush(phase === 'close' ? ACTIVITY_FLUSH_ON_CLOSE_MS : ACTIVITY_FLUSH_MS);
+      this.scheduleFlush(ACTIVITY_FLUSH_MS);
       this.broadcast({ type: 'activity', date, segment: { ...segment } });
     });
   }
