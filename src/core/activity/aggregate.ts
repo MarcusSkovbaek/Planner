@@ -123,6 +123,12 @@ export function blockMinutes(block: Pick<CapturedBlock, 'start' | 'end'>): { sta
   return { startMin, endMin };
 }
 
+/** What a block is about, for matter suggestions: its subject and its window titles without the
+ *  program name, so a client called "Microsoft" does not match every "… - Microsoft Edge" window. */
+export function blockTexts(block: Pick<CapturedBlock, 'app' | 'appName' | 'subject' | 'titles'>): string[] {
+  return [block.subject, ...block.titles.map((title) => parseActivity(block.app, title, block.appName).subject)];
+}
+
 /** Builds a sensible narrative from the blocks an entry is created from. */
 export function suggestNarrative(blocks: readonly Pick<CapturedBlock, 'subject' | 'activeMs'>[]): string {
   const seen = new Set<string>();

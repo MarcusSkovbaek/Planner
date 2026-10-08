@@ -98,6 +98,8 @@ export class ActivityTracker {
 
   /** Pauses recording. `until` = epoch ms, or `null` to pause until `resume()`. */
   pause(until: number | null): void {
+    // Capture never started: keep showing why instead of a pause that nothing would end.
+    if (!this.available) return;
     this.pausedUntil = until;
     this.closeOpen(this.clock());
     this.setStatus('paused', null);
@@ -115,7 +117,7 @@ export class ActivityTracker {
     const now = this.clock();
     const lastInput = now - Math.max(0, this.idle.getIdleSeconds()) * 1000;
     this.closeOpen(Math.max(this.open?.segment.start ?? now, lastInput));
-    if (this.status.state !== 'paused' && this.status.state !== 'disabled') this.setStatus('idle', null);
+    if (this.available && this.status.state !== 'paused' && this.status.state !== 'disabled') this.setStatus('idle', null);
   }
 
   wake(): void {
@@ -210,6 +212,12 @@ export class ActivityTracker {
         open.segment.end = now;
         this.maybeEmit(open, now);
       }
+    } else if (open && !open.materialized && open.segment.app === sample.app) {
+      // A title change within the same app is not alt-tab noise: the new title takes over the
+      // time of a visit too short to keep, or a tab whose title keeps changing is never recorded.
+      // The time only ever moves forward to the page now in front, never back to an earlier one.
+      this.open = null;
+      this.openSegment(sample, title, Math.max(open.segment.start, dayStartMs(dateKeyOf(now))), now);
     } else {
       this.closeOpen(now);
       this.openSegment(sample, title, now, now);

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { parseActivity, normalizeSubjectKey } from '@core/activity/parse';
 import { appKeyFromProcess } from '@core/activity/apps';
+import { buildCapturedBlocks } from '@core/activity/aggregate';
+import { generateDemoDay } from '@core/demo/generate';
 
 describe('appKeyFromProcess', () => {
   it('normalises paths and casing', () => {
@@ -64,5 +66,29 @@ describe('parseActivity', () => {
   it('handles PDF readers and Explorer', () => {
     expect(parseActivity('acrobat', 'Skøde.pdf - Adobe Acrobat Pro (64-bit)')).toMatchObject({ kind: 'pdf', subject: 'Skøde.pdf' });
     expect(parseActivity('explorer', 'Nordlys - Vindpark')).toMatchObject({ kind: 'files', subject: 'Nordlys - Vindpark' });
+  });
+});
+
+describe('parseActivity cache', () => {
+  it('returns the same frozen result for the same window', () => {
+    const first = parseActivity('winword', 'Kontrakt.docx - Word', 'Word');
+    expect(parseActivity('winword', 'Kontrakt.docx - Word', 'Word')).toBe(first);
+    expect(Object.isFrozen(first)).toBe(true);
+  });
+
+  it('keys the cache on the program name as well', () => {
+    expect(parseActivity('acme', 'Report - Acme Suite', 'Other').subject).toBe('Report - Acme Suite');
+    expect(parseActivity('acme', 'Report - Acme Suite', 'Acme Suite').subject).toBe('Report');
+  });
+
+  it('gives the same results after the cache has been full and cleared', () => {
+    const segments = ['2026-10-05', '2026-10-06', '2026-10-07'].flatMap((date) => generateDemoDay(date).segments);
+    const parseAll = () => segments.map((s) => ({ ...parseActivity(s.app, s.title, s.appName) }));
+    const blocks = () => buildCapturedBlocks(segments, { mergeGapMs: 5 * 60_000 });
+    const first = parseAll();
+    const firstBlocks = blocks();
+    for (let i = 0; i <= 5000; i++) parseActivity('chrome', `Side ${i} - Google Chrome`, 'Chrome');
+    expect(parseAll()).toEqual(first);
+    expect(blocks()).toEqual(firstBlocks);
   });
 });

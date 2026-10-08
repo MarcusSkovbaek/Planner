@@ -52,6 +52,10 @@ function openWindow(view?: 'settings'): void {
     mainWindow.on('closed', () => {
       mainWindow = null;
     });
+    // Windows ends the session (shut down, restart, log off) without a quit event: save first.
+    const saveBeforeSessionEnd = () => void service?.flush().catch(() => undefined);
+    mainWindow.on('query-session-end', saveBeforeSessionEnd);
+    mainWindow.on('session-end', saveBeforeSessionEnd);
   } else {
     showWindow(mainWindow);
   }

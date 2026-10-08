@@ -7,6 +7,18 @@ const BACKUP_KEEP = 14;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Writes and flushes a file. Without the flush, a power cut after the rename can leave the
+ *  new name pointing at empty or zero-filled data. */
+async function writeSynced(file: string, data: string): Promise<void> {
+  const handle = await fs.open(file, 'w');
+  try {
+    await handle.writeFile(data, 'utf8');
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
 /**
  * JSON-file storage. Writes are atomic (temp file + rename) and serialised per key, so a
  * crash or power loss never leaves a half-written file. Selected keys get a daily backup.
@@ -35,7 +47,8 @@ export class FileStorage implements KeyValueStorage {
       throw err;
     }
     try {
-      return JSON.parse(text) as T;
+      // Editors and PowerShell's Set-Content -Encoding UTF8 may prepend a BOM.
+      return JSON.parse(text.replace(/^\uFEFF/, '')) as T;
     } catch {
       // Keep the damaged file for manual recovery and start fresh.
       await fs.rename(file, `${file}.corrupt-${Date.now()}`).catch(() => undefined);
@@ -79,7 +92,7 @@ export class FileStorage implements KeyValueStorage {
     await fs.mkdir(dirname(file), { recursive: true });
     const data = JSON.stringify(value);
     const tmp = `${file}.${process.pid}.tmp`;
-    await fs.writeFile(tmp, data, 'utf8');
+    await writeSynced(tmp, data);
     // Windows can briefly lock files (antivirus, indexer): retry the rename a few times.
     for (let attempt = 0; ; attempt++) {
       try {
@@ -87,12 +100,12 @@ export class FileStorage implements KeyValueStorage {
         break;
       } catch (err) {
         if (attempt >= 5) {
-          await fs.writeFile(file, data, 'utf8');
+          await writeSynced(file, data);
           await fs.rm(tmp, { force: true });
           break;
         }
         await sleep(40 * (attempt + 1));
-        if ((err as NodeJS.ErrnoException).code === 'ENOENT') await fs.writeFile(tmp, data, 'utf8');
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') await writeSynced(tmp, data);
       }
     }
     if (this.backupKeys.includes(key)) await this.backup(key, data);

@@ -1,4 +1,4 @@
-import { suggestNarrative, type CapturedBlock } from '@core/activity/aggregate';
+import { blockTexts, suggestNarrative, type CapturedBlock } from '@core/activity/aggregate';
 import { suggestMatters } from '@core/matters';
 import type { DateKey, Matter, Settings, TimeEntryInput } from '@core/model';
 import { MINUTES_PER_DAY, minuteOfDay, roundDuration, snapMinutes } from '@core/time';
@@ -22,10 +22,7 @@ export function entryFromBlocks(
   const earliest = Math.min(...blocks.map((b) => b.start));
   let startMin = options.startMin ?? snapMinutes(minuteOfDay(earliest), incrementMin, 'floor');
   startMin = Math.max(0, Math.min(startMin, MINUTES_PER_DAY - duration));
-  const matter = confidentMatter(
-    blocks.flatMap((b) => [b.subject, ...b.titles]),
-    options.matters,
-  );
+  const matter = confidentMatter(blocks.flatMap(blockTexts), options.matters);
   return {
     date: options.date,
     startMin,

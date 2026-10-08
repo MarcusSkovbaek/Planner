@@ -14,13 +14,31 @@ const SEPARATOR = String.raw`\s+[-–—|]\s+`;
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/** Compiled suffix patterns per suffix list: building them per call dominated parsing. */
+const suffixCache = new Map<string, { re: RegExp; lower: string }[]>();
+
+function suffixPatterns(suffixes: readonly string[]): { re: RegExp; lower: string }[] {
+  const key = suffixes.join('\n');
+  let patterns = suffixCache.get(key);
+  if (!patterns) {
+    patterns = [...suffixes]
+      .sort((a, b) => b.length - a.length)
+      .map((suffix) => ({
+        re: new RegExp(`${SEPARATOR}${escapeRegExp(suffix.replace(INVISIBLE, ''))}(\\s*\\([^)]*\\))?\\s*$`, 'i'),
+        lower: suffix.toLowerCase(),
+      }));
+    if (suffixCache.size > 500) suffixCache.clear();
+    suffixCache.set(key, patterns);
+  }
+  return patterns;
+}
+
 function stripSuffixes(title: string, suffixes: readonly string[] | undefined): string {
   if (!suffixes?.length) return title;
-  const sorted = [...suffixes].sort((a, b) => b.length - a.length);
-  for (const suffix of sorted) {
-    const re = new RegExp(`${SEPARATOR}${escapeRegExp(suffix.replace(INVISIBLE, ''))}(\\s*\\([^)]*\\))?\\s*$`, 'i');
+  const lowerTitle = title.toLowerCase();
+  for (const { re, lower } of suffixPatterns(suffixes)) {
     if (re.test(title)) return title.replace(re, '');
-    if (title.toLowerCase() === suffix.toLowerCase()) return '';
+    if (lowerTitle === lower) return '';
   }
   return title;
 }
@@ -46,7 +64,7 @@ function parseOutlook(subject: string): { kind: ActivityKind; subject: string } 
   let s = subject.replace(EMAIL_ADDRESS, '');
   const message = /\s+[-–]\s+(message|meddelelse)(\s*\([^)]*\))?\s*$/i;
   if (message.test(s)) return { kind: 'email', subject: s.replace(message, '') };
-  const meeting = /\s+[-–]\s+(meeting|meeting occurrence|møde|mødeindkaldelse|appointment|aftale|event|begivenhed)\s*$/i;
+  const meeting = /\s+[-–]\s+(meeting|meeting occurrence|meeting series|møde|mødeindkaldelse|mødeserie|appointment|appointment series|aftale|aftaleserie|event|begivenhed)\s*$/i;
   if (meeting.test(s)) return { kind: 'calendar', subject: s.replace(meeting, '') };
   if (/^(calendar|kalender)\b/i.test(s)) {
     s = s.split(/\s+[-–]\s+/)[0] ?? s;
@@ -93,6 +111,9 @@ const EMAIL_PREFIX = /^((re|sv|aw|fw|fwd|vs|wg|tr)\s*(\[\d+\])?\s*:\s*)+/i;
 const FILE_EXTENSION = /\.(docx?|docm|dotx|xlsx?|xlsm|xlsb|csv|pptx?|pptm|pdf|txt|rtf|msg|eml|odt|ods|odp)$/i;
 
 /** Normalises a subject so that `RE: Offer.docx` and `Offer` merge into one captured block. */
+/** A clock or timer reading such as 0:12, 12:34 or 01:02:03, which changes while the page stays the same. */
+const CLOCK_READING = /\b\d{1,2}:\d{2}(:\d{2})?\b/g;
+
 export function normalizeSubjectKey(subject: string): string {
   return subject
     .toLowerCase()
@@ -100,6 +121,7 @@ export function normalizeSubjectKey(subject: string): string {
     .replace(FILE_EXTENSION, '')
     .replace(NOTIFICATION_COUNT, '')
     .replace(TRAILING_COUNT, '')
+    .replace(CLOCK_READING, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -108,8 +130,24 @@ export function cleanTitle(title: string): string {
   return title.replace(INVISIBLE, '').replace(/\s+/g, ' ').trim();
 }
 
-/** Turns a raw process + window title into something meaningful for time registration. */
+const parseCache = new Map<string, ParsedActivity>();
+const PARSE_CACHE_MAX = 5000;
+
+/** Turns a raw process + window title into something meaningful for time registration.
+ *  Memoised: a day has thousands of segments but only a few hundred distinct windows, and the
+ *  planner re-aggregates the whole day on every tracker update. */
 export function parseActivity(app: string, rawTitle: string, appName = ''): ParsedActivity {
+  const key = `${app}\u0000${appName}\u0000${rawTitle}`;
+  let parsed = parseCache.get(key);
+  if (!parsed) {
+    parsed = Object.freeze(parseActivityUncached(app, rawTitle, appName));
+    if (parseCache.size >= PARSE_CACHE_MAX) parseCache.clear();
+    parseCache.set(key, parsed);
+  }
+  return parsed;
+}
+
+function parseActivityUncached(app: string, rawTitle: string, appName: string): ParsedActivity {
   const def = APP_CATALOG[app];
   const title = cleanTitle(rawTitle);
   let kind: ActivityKind = def?.kind ?? 'other';

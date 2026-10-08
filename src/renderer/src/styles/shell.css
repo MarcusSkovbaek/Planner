@@ -180,8 +180,16 @@
   background: var(--text-4);
 }
 .state-active .tracking-dot {
+  position: relative;
   background: var(--success);
-  --pulse-color: var(--success);
+}
+.state-active .tracking-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--success);
+  opacity: 0;
   animation: pulse-dot 2.2s ease-out infinite;
 }
 .state-idle .tracking-dot {

@@ -66,9 +66,14 @@ const KEYS = {
   activityPrefix: 'activity/',
 };
 
-const ACTIVITY_FLUSH_MS = 10_000;
-const ACTIVITY_FLUSH_ON_CLOSE_MS = 1_500;
+/** How often the day's activity file is rewritten while tracking. Each flush rewrites the whole
+ *  file, so this bounds disk writes; a crash loses at most this much. Quitting Planner, installing
+ *  an update, locking and sleep flush at once, and so does a Windows shutdown or log-off once the
+ *  main window has been opened (Windows sends no quit event then). */
+const ACTIVITY_FLUSH_MS = 30_000;
 const MAX_CACHED_DAYS = 14;
+/** How long a deleted, already closed segment is remembered: long enough for a queued close event. */
+const DELETED_SEGMENT_MEMORY_MS = 10 * 60_000;
 
 export function trackerOptionsFrom(settings: Settings): TrackerOptions {
   return {
@@ -98,6 +103,9 @@ export class PlannerService implements PlannerApi {
   private readonly dirtyDays = new Set<DateKey>();
   private readonly knownApps = new Map<string, string>();
   private knownAppsDirty = false;
+  /** Segments the user deleted, with when to forget them. Tracker events still on their way for
+   *  them are dropped, so they stay deleted; the open segment is remembered until it closes. */
+  private readonly deletedSegments = new Map<string, number>();
   private readonly listeners = new Set<PlannerListener>();
   private tracker: ActivityTracker | null = null;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -218,14 +226,15 @@ export class PlannerService implements PlannerApi {
     return this.enqueue(async () => {
       const now = this.clock();
       const saved: TimeEntry[] = [];
+      const entries = new Map(this.entries);
       for (const input of inputs) {
-        const existing = input.id ? this.entries.get(input.id) : undefined;
+        const existing = input.id ? entries.get(input.id) : undefined;
         if (existing?.status === 'released') fail(ApiErrorCode.EntryLocked);
         const entry = this.normalizeEntry(input, existing, now);
-        this.entries.set(entry.id, entry);
+        entries.set(entry.id, entry);
         saved.push(entry);
       }
-      await this.persistEntries();
+      await this.persistEntries(entries);
       this.broadcast({ type: 'entries', changed: saved, removed: [] });
       return saved;
     });
@@ -234,9 +243,10 @@ export class PlannerService implements PlannerApi {
   deleteEntries(ids: string[]): Promise<void> {
     return this.enqueue(async () => {
       if (ids.some((id) => this.entries.get(id)?.status === 'released')) fail(ApiErrorCode.EntryLocked);
-      const removed = ids.filter((id) => this.entries.delete(id));
+      const entries = new Map(this.entries);
+      const removed = ids.filter((id) => entries.delete(id));
       if (!removed.length) return;
-      await this.persistEntries();
+      await this.persistEntries(entries);
       this.broadcast({ type: 'entries', changed: [], removed });
     });
   }
@@ -245,17 +255,20 @@ export class PlannerService implements PlannerApi {
     return this.enqueue(async () => {
       const now = this.clock();
       const changed: TimeEntry[] = [];
+      const entries = new Map(this.entries);
       for (const id of ids) {
-        const e = this.entries.get(id);
+        const e = entries.get(id);
         if (!e || e.status === status) continue;
+        // A released entry must have a matter that exists, also when it was deleted after linking.
+        if (status === 'released' && !this.matters.some((m) => m.id === e.matterId)) continue;
         const next: TimeEntry = { ...e, status, updatedAt: now };
         if (status === 'released') next.releasedAt = now;
         else delete next.releasedAt;
-        this.entries.set(id, next);
+        entries.set(id, next);
         changed.push(next);
       }
       if (changed.length) {
-        await this.persistEntries();
+        await this.persistEntries(entries);
         this.broadcast({ type: 'entries', changed, removed: [] });
       }
       return changed;
@@ -267,11 +280,18 @@ export class PlannerService implements PlannerApi {
       const list = await this.loadActivities(date);
       const remove = new Set(ids);
       const kept = list.filter((a) => !remove.has(a.id));
-      if (kept.length === list.length) return;
-      this.activity.set(date, kept);
-      await this.deps.storage.write(KEYS.activity(date), kept);
-      this.dirtyDays.delete(date);
-      this.broadcast({ type: 'activity-removed', date, ids });
+      if (kept.length !== list.length) {
+        // Write first, so a failed delete does not look done and come back after a restart.
+        await this.deps.storage.write(KEYS.activity(date), kept);
+        this.activity.set(date, kept);
+        this.dirtyDays.delete(date);
+      }
+      // Otherwise the tracker's next update, a queued close or a flush would save them again.
+      const now = this.clock();
+      for (const [id, until] of this.deletedSegments) if (until < now) this.deletedSegments.delete(id);
+      const open = this.tracker?.getOpenSegment();
+      for (const id of remove) this.deletedSegments.set(id, id === open?.id ? Infinity : now + DELETED_SEGMENT_MEMORY_MS);
+      if (kept.length !== list.length) this.broadcast({ type: 'activity-removed', date, ids });
     });
   }
 
@@ -291,8 +311,7 @@ export class PlannerService implements PlannerApi {
       if (this.matters.some((m) => m.id !== matter.id && matterCode(m).toLowerCase() === code)) {
         fail(ApiErrorCode.MatterDuplicate);
       }
-      this.matters = existing ? this.matters.map((m) => (m.id === matter.id ? matter : m)) : [...this.matters, matter];
-      await this.persistMatters();
+      await this.persistMatters(existing ? this.matters.map((m) => (m.id === matter.id ? matter : m)) : [...this.matters, matter]);
       return matter;
     });
   }
@@ -300,9 +319,8 @@ export class PlannerService implements PlannerApi {
   deleteMatter(id: string): Promise<void> {
     return this.enqueue(async () => {
       if ([...this.entries.values()].some((e) => e.matterId === id)) fail(ApiErrorCode.MatterInUse);
-      const before = this.matters.length;
-      this.matters = this.matters.filter((m) => m.id !== id);
-      if (this.matters.length !== before) await this.persistMatters();
+      const matters = this.matters.filter((m) => m.id !== id);
+      if (matters.length !== this.matters.length) await this.persistMatters(matters);
     });
   }
 
@@ -342,8 +360,7 @@ export class PlannerService implements PlannerApi {
           result.added++;
         }
       }
-      this.matters = [...byCode.values()];
-      await this.persistMatters();
+      await this.persistMatters([...byCode.values()]);
       return result;
     });
   }
@@ -377,6 +394,9 @@ export class PlannerService implements PlannerApi {
   /** For the host: system lock/sleep and resume events. */
   suspendTracking(): void {
     this.tracker?.suspend();
+    // Save at once before the machine locks or sleeps. If the write fails, the day stays dirty
+    // and the next flush or dispose() tries again.
+    void this.flush().catch(() => undefined);
   }
 
   wakeTracking(): void {
@@ -452,6 +472,10 @@ export class PlannerService implements PlannerApi {
     }
     const { segment, phase } = event;
     void this.enqueue(async () => {
+      if (this.deletedSegments.has(segment.id)) {
+        if (phase === 'close') this.deletedSegments.delete(segment.id);
+        return;
+      }
       const date = dateKeyOf(segment.start);
       const list = await this.loadActivities(date);
       const index = list.findIndex((a) => a.id === segment.id);
@@ -469,7 +493,7 @@ export class PlannerService implements PlannerApi {
         this.knownApps.set(segment.app, segment.appName);
         this.knownAppsDirty = true;
       }
-      this.scheduleFlush(phase === 'close' ? ACTIVITY_FLUSH_ON_CLOSE_MS : ACTIVITY_FLUSH_MS);
+      this.scheduleFlush(ACTIVITY_FLUSH_MS);
       this.broadcast({ type: 'activity', date, segment: { ...segment } });
     });
   }
@@ -492,7 +516,7 @@ export class PlannerService implements PlannerApi {
     }
     // Include the still-open segment so a crash loses at most a few seconds.
     const open = this.tracker?.getOpenSegment();
-    if (open) {
+    if (open && !this.deletedSegments.has(open.id)) {
       const date = dateKeyOf(open.start);
       const list = await this.loadActivities(date);
       const index = list.findIndex((a) => a.id === open.id);
@@ -541,12 +565,16 @@ export class PlannerService implements PlannerApi {
     }
   }
 
-  private persistEntries(): Promise<void> {
-    return this.deps.storage.write(KEYS.entries, sortEntries([...this.entries.values()]));
+  /** Writes `entries` and only then makes them current, so a failed write changes nothing. */
+  private async persistEntries(entries: Map<string, TimeEntry>): Promise<void> {
+    await this.deps.storage.write(KEYS.entries, sortEntries([...entries.values()]));
+    this.entries = entries;
   }
 
-  private async persistMatters(): Promise<void> {
-    await this.deps.storage.write(KEYS.matters, this.matters);
+  /** Writes `matters` and only then makes them current, so a failed write changes nothing. */
+  private async persistMatters(matters: Matter[]): Promise<void> {
+    await this.deps.storage.write(KEYS.matters, matters);
+    this.matters = matters;
     this.broadcast({ type: 'matters', matters: [...this.matters] });
   }
 
@@ -560,6 +588,7 @@ export class PlannerService implements PlannerApi {
       date: input.date,
       startMin,
       endMin,
+      // A deleted matter (e.g. an undo restores an entry after its matter was deleted) becomes "no matter".
       matterId: typeof input.matterId === 'string' && input.matterId ? input.matterId : null,
       narrative: String(input.narrative ?? existing?.narrative ?? '').slice(0, 4000),
       billingType: BILLING_TYPES.includes(input.billingType as never)

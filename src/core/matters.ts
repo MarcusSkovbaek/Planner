@@ -49,9 +49,27 @@ export function parseBillingType(value: string | undefined, fallback: BillingTyp
   const v = (value ?? '').toLowerCase().trim();
   if (!v) return fallback;
   if (/(forretning|business|bd\b|udvikling)/.test(v)) return 'businessDevelopment';
-  if (/(ikke|non|nej|no\b|false|intern|internal|0)/.test(v)) return 'nonBillable';
-  if (/(fakt|bill|ja|yes|true|1)/.test(v)) return 'billable';
+  if (/\b(ikke|non|not|un|u)[\s-]*(fakt|bill)|\b(ikke|non|nej|no|false|falsk|intern(e|t|al)?|pro[\s-]*bono)\b|^0$/.test(v)) return 'nonBillable';
+  if (/(fakt|bill|ja|yes|true)|^1$/.test(v)) return 'billable';
   return fallback;
+}
+
+/** Client and matter numbers such as 400100 or 000004-01: data, never a column header. */
+const isNumberCell = (cell: string) => /^\d[\d\s./-]*$/.test(cell.trim());
+
+/**
+ * Whether the first row holds column headers. Headers are text, so a row with a number cell is
+ * data (pasted Excel rows often have no header). Otherwise it is a header when a column name is
+ * recognised, or when it has text above a column that holds only numbers further down.
+ */
+export function hasHeaderRow(rows: readonly (readonly string[])[]): boolean {
+  const [first, ...rest] = rows;
+  if (!first || first.some(isNumberCell)) return false;
+  if (Object.values(detectMatterColumns(first)).some((index) => index >= 0)) return true;
+  return first.some((cell, col) => {
+    const below = rest.map((row) => (row[col] ?? '').trim()).filter(Boolean);
+    return cell.trim() !== '' && below.length > 0 && below.every(isNumberCell);
+  });
 }
 
 /** Converts parsed CSV rows (without header) into matter inputs using a column mapping. */
@@ -100,6 +118,25 @@ function significantWords(text: string): string[] {
     .filter((w) => w.length >= 4 && !STOPWORDS.has(w));
 }
 
+const WORD_CHAR = /[\p{L}\p{N}]/u;
+
+/**
+ * Finds a short term or a number only as a whole word, so `HR` does not match "Chrome" and
+ * matter 1234 does not match 12345. Longer keywords may sit inside Danish compound words
+ * ("Vindpark" in "Havvindparken").
+ */
+function containsTerm(text: string, term: string): boolean {
+  const numeric = /\p{N}/u.test(term);
+  if (term.length >= 5 && !numeric) return text.includes(term);
+  const wholeWord = term.length < 4 || numeric;
+  for (let i = text.indexOf(term); i >= 0; i = text.indexOf(term, i + 1)) {
+    if (WORD_CHAR.test(text[i - 1] ?? '')) continue;
+    if (wholeWord && WORD_CHAR.test(text[i + term.length] ?? '')) continue;
+    return true;
+  }
+  return false;
+}
+
 export interface MatterSuggestion {
   matter: Matter;
   score: number;
@@ -118,11 +155,11 @@ export function suggestMatters(texts: readonly string[], matters: readonly Matte
     if (m.archived) continue;
     let score = 0;
     const code = matterCode(m).toLowerCase();
-    if (code.length >= 5 && haystack.includes(code)) score += 10;
-    if (m.matterNumber.length >= 4 && haystack.includes(m.matterNumber.toLowerCase())) score += 6;
+    if (code.length >= 5 && containsTerm(haystack, code)) score += 10;
+    if (m.matterNumber.length >= 4 && containsTerm(haystack, m.matterNumber.toLowerCase())) score += 6;
     for (const k of m.keywords) {
       const kw = k.toLowerCase().trim();
-      if (kw.length >= 2 && haystack.includes(kw)) score += 5;
+      if (kw.length >= 2 && containsTerm(haystack, kw)) score += 5;
     }
     for (const w of significantWords(m.clientName)) if (words.has(w)) score += 2;
     for (const w of significantWords(m.matterName)) if (words.has(w)) score += 1;

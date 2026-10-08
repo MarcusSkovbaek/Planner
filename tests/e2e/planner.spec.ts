@@ -217,6 +217,32 @@ test.describe('other views', () => {
     await expect(rows).toHaveCount(count + 3);
   });
 
+  test('lists the first matters and searches all of them in a long matter list', async ({ page }) => {
+    await openApp(page);
+    await page.getByTestId('nav-matters').click();
+    await page.getByTestId('import-matters').click();
+    const rows = Array.from({ length: 150 }, (_, i) => `${500001 + i};Testklient ${i + 1} ApS;000001;Rådgivning`);
+    await page.getByTestId('import-text').fill(['Klientnr;Klient;Sagsnr;Sagsnavn', ...rows].join('\n'));
+    await page.getByTestId('import-submit').click();
+    await expect(page.getByTestId('import-text')).toBeHidden();
+
+    await page.getByTestId('nav-planner').click();
+    await gotoDayWithData(page);
+    await createEveningEntry(page);
+    await page.getByTestId('matter-picker').click();
+    await expect(page.getByTestId('matter-search-hint')).toContainText(/Skriv for at søge i alle \d+ sager/);
+    expect(await page.getByRole('option').count()).toBeLessThanOrEqual(110);
+
+    await page.getByTestId('matter-search').fill('500150');
+    await expect(page.getByRole('option')).toHaveCount(1);
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('matter-picker')).toContainText('Testklient 150 ApS');
+
+    // The selected matter sorts after the first 100, but is still listed and checked.
+    await page.getByTestId('matter-picker').click();
+    await expect(page.getByRole('option', { selected: true })).toContainText('Testklient 150 ApS');
+  });
+
   test('lists entries and exports them as CSV', async ({ page }) => {
     await openApp(page);
     await page.getByTestId('nav-list').click();

@@ -96,7 +96,13 @@ export function ListView() {
   };
 
   const exportCsv = async () => {
-    if (await api().exportEntries(from, to)) toast({ message: t('toast.exported') });
+    try {
+      if (await api().exportEntries(from, to)) toast({ message: t('toast.exported') });
+    } catch (err) {
+      // Typically EBUSY: Excel locks a CSV it has open against writes.
+      console.error(err);
+      toast({ tone: 'error', message: t('toast.exportFailed') });
+    }
   };
 
   const open = (e: TimeEntry) => {
