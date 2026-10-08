@@ -768,8 +768,12 @@
   height: 5px;
   border-radius: 50%;
   background: #fff;
-  animation: pulse-dot 1.8s ease-out infinite;
-  --pulse-color: #fff;
+  animation: live-blink 1.8s ease-in-out infinite;
+}
+@keyframes live-blink {
+  50% {
+    opacity: 0.35;
+  }
 }
 .cc-meta {
   padding-left: 19px;
