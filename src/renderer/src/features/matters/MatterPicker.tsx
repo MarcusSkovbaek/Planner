@@ -15,10 +15,17 @@ const fold = (s: string) =>
     .replace(/æ/g, 'ae')
     .replace(/å/g, 'a');
 
+/** Folded search text per matter. Matters are replaced, never mutated, so the cache stays valid. */
+const haystacks = new WeakMap<Matter, string>();
+
 export function matchesQuery(m: Matter, query: string): boolean {
   const tokens = fold(query).split(/\s+/).filter(Boolean);
   if (!tokens.length) return true;
-  const hay = fold([matterCode(m), m.clientNumber, m.matterNumber, m.clientName, m.matterName, ...m.keywords].join(' '));
+  let hay = haystacks.get(m);
+  if (hay === undefined) {
+    hay = fold([matterCode(m), m.clientNumber, m.matterNumber, m.clientName, m.matterName, ...m.keywords].join(' '));
+    haystacks.set(m, hay);
+  }
   return tokens.every((tok) => hay.includes(tok));
 }
 
@@ -32,6 +39,8 @@ interface MatterPickerProps {
   onCreateMatter?(): void;
 }
 
+const ALL_MATTERS_LIMIT = 100;
+
 type Row = { kind: 'header'; label: string; icon?: React.ReactNode } | { kind: 'matter'; matter: Matter };
 
 export function MatterPicker({ value, matters, onChange, suggestions = [], recent = [], disabled, onCreateMatter }: MatterPickerProps) {
@@ -43,8 +52,14 @@ export function MatterPicker({ value, matters, onChange, suggestions = [], recen
   const listRef = useRef<HTMLDivElement>(null);
   const selected = value ? matters.find((m) => m.id === value) : undefined;
 
+  // Sorted once per matter list, not on every render of the editor.
+  const sorted = useMemo(
+    () => (open ? matters.filter((m) => !m.archived).sort((a, b) => matterCode(a).localeCompare(matterCode(b))) : []),
+    [matters, open],
+  );
   const rows = useMemo<Row[]>(() => {
-    const live = matters.filter((m) => !m.archived);
+    if (!open) return [];
+    const live = sorted;
     if (query.trim()) {
       return live
         .filter((m) => matchesQuery(m, query))
@@ -64,9 +79,10 @@ export function MatterPicker({ value, matters, onChange, suggestions = [], recen
     };
     section(t('editor.suggestions'), suggestions, <Sparkles />);
     section(t('editor.recent'), recent);
-    section(t('editor.allMatters'), [...live].sort((a, b) => matterCode(a).localeCompare(matterCode(b))));
+    // Without a query only the first matters are listed; typing searches all of them.
+    section(t('editor.allMatters'), live.slice(0, ALL_MATTERS_LIMIT));
     return out;
-  }, [matters, query, suggestions, recent, t]);
+  }, [open, sorted, query, suggestions, recent, t]);
 
   const selectable = rows.flatMap((r, i) => (r.kind === 'matter' ? [i] : []));
 
@@ -176,6 +192,11 @@ export function MatterPicker({ value, matters, onChange, suggestions = [], recen
                 {row.matter.id === value && <Check className="mp-check" />}
               </button>
             ),
+          )}
+          {!query.trim() && sorted.length > ALL_MATTERS_LIMIT && (
+            <div className="mp-empty" data-testid="matter-search-hint">
+              {t('editor.typeToSearchAll', { n: sorted.length })}
+            </div>
           )}
           {!rows.length && <div className="mp-empty">{matters.length ? t('editor.noResults') : t('editor.noMatters')}</div>}
         </div>

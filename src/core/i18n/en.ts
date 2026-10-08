@@ -161,6 +161,7 @@ export const en: Dictionary = {
     createMatter: 'Create matter',
     recent: 'Recently used',
     allMatters: 'All matters',
+    typeToSearchAll: 'Type to search all {n} matters',
     narrative: 'Narrative',
     narrativePlaceholder: 'What did you work on?',
     date: 'Date',

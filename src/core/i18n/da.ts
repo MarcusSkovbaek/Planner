@@ -160,6 +160,7 @@ export const da = {
     createMatter: 'Opret sag',
     recent: 'Senest brugt',
     allMatters: 'Alle sager',
+    typeToSearchAll: 'Skriv for at søge i alle {n} sager',
     narrative: 'Beskrivelse',
     narrativePlaceholder: 'Hvad arbejdede du på?',
     date: 'Dato',
