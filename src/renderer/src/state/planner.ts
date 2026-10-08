@@ -260,6 +260,12 @@ export const usePlanner = create<PlannerState>((set, get) => {
           status,
         );
         upsertEntries(changed);
+        // The backend only releases entries whose matter still exists.
+        const skipped = eligible.length - changed.length;
+        if (status === 'released' && skipped > 0) {
+          toast({ tone: 'error', message: skipped === 1 ? t('toast.missingMatter') : t('toast.missingMatterMany', { n: skipped }) });
+        }
+        if (!changed.length) return 0;
         pushUndo('status', [{ kind: 'status', ids: changed.map((e) => e.id), status: status === 'released' ? 'draft' : 'released' }]);
         if (status === 'released') {
           undoToast(changed.length === 1 ? t('toast.released') : t('toast.releasedMany', { n: changed.length }));
@@ -331,6 +337,8 @@ export const usePlanner = create<PlannerState>((set, get) => {
         }
         toast({ tone: 'info', message: currentT()('toast.undone') });
       } catch (err) {
+        // A failed save can be retried with the next Ctrl+Z; a refused step (a locked entry) cannot.
+        if (!apiErrorCode(err)) set({ undoStack: [...get().undoStack, item] });
         reportError(err);
         void get().load();
       }

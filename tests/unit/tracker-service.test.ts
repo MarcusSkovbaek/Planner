@@ -142,7 +142,8 @@ describe('PlannerService', () => {
     const storage = new MemoryStorage();
     const service = new PlannerService({ storage, platform });
     await service.init();
-    const [entry] = await service.saveEntries([{ date: '2026-10-07', startMin: 540, endMin: 600, narrative: 'Review', matterId: null }]);
+    const matter = await service.saveMatter({ clientNumber: '1', matterNumber: '2', clientName: 'Klient', matterName: 'Sag' });
+    const [entry] = await service.saveEntries([{ date: '2026-10-07', startMin: 540, endMin: 600, narrative: 'Review', matterId: matter.id }]);
     expect(entry).toMatchObject({ status: 'draft', billingType: 'billable' });
     await service.setEntryStatus([entry!.id], 'released');
     await expect(service.saveEntries([{ ...entry!, narrative: 'changed' }])).rejects.toThrow('ENTRY_LOCKED');

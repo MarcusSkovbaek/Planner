@@ -256,6 +256,8 @@ export class PlannerService implements PlannerApi {
       for (const id of ids) {
         const e = entries.get(id);
         if (!e || e.status === status) continue;
+        // A released entry must have a matter that exists, also when it was deleted after linking.
+        if (status === 'released' && !this.matters.some((m) => m.id === e.matterId)) continue;
         const next: TimeEntry = { ...e, status, updatedAt: now };
         if (status === 'released') next.releasedAt = now;
         else delete next.releasedAt;
@@ -274,17 +276,19 @@ export class PlannerService implements PlannerApi {
     return this.enqueue(async () => {
       const list = await this.loadActivities(date);
       const remove = new Set(ids);
+      const kept = list.filter((a) => !remove.has(a.id));
+      if (kept.length !== list.length) {
+        // Write first, so a failed delete does not look done and come back after a restart.
+        await this.deps.storage.write(KEYS.activity(date), kept);
+        this.activity.set(date, kept);
+        this.dirtyDays.delete(date);
+      }
       // Otherwise the tracker's next update, a queued close or a flush would save them again.
       const now = this.clock();
       for (const [id, until] of this.deletedSegments) if (until < now) this.deletedSegments.delete(id);
       const open = this.tracker?.getOpenSegment();
       for (const id of remove) this.deletedSegments.set(id, id === open?.id ? Infinity : now + DELETED_SEGMENT_MEMORY_MS);
-      const kept = list.filter((a) => !remove.has(a.id));
-      if (kept.length === list.length) return;
-      this.activity.set(date, kept);
-      await this.deps.storage.write(KEYS.activity(date), kept);
-      this.dirtyDays.delete(date);
-      this.broadcast({ type: 'activity-removed', date, ids });
+      if (kept.length !== list.length) this.broadcast({ type: 'activity-removed', date, ids });
     });
   }
 
@@ -579,7 +583,7 @@ export class PlannerService implements PlannerApi {
       startMin,
       endMin,
       // A deleted matter (e.g. an undo restores an entry after its matter was deleted) becomes "no matter".
-      matterId: typeof input.matterId === 'string' && this.matters.some((m) => m.id === input.matterId) ? input.matterId : null,
+      matterId: typeof input.matterId === 'string' && input.matterId ? input.matterId : null,
       narrative: String(input.narrative ?? existing?.narrative ?? '').slice(0, 4000),
       billingType: BILLING_TYPES.includes(input.billingType as never)
         ? (input.billingType as TimeEntry['billingType'])

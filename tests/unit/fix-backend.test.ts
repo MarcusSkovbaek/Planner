@@ -1,8 +1,12 @@
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ActivityTracker } from '@core/tracking/ActivityTracker';
 import type { WindowSample } from '@core/tracking/types';
 import { PlannerService } from '@core/backend/PlannerService';
 import { MemoryStorage } from '@core/backend/storage';
+import { FileStorage } from '../../src/main/storage/FileStorage';
 import type { ActivitySegment, Matter, TimeEntry } from '@core/model';
 
 const platform = {
@@ -73,12 +77,48 @@ describe('PlannerService failed writes (data-4)', () => {
     const storage = new FlakyStorage();
     const service = new PlannerService({ storage, platform });
     await service.init();
-    const [entry] = await service.saveEntries([ENTRY]);
+    const matter = await service.saveMatter({ clientNumber: '1', matterNumber: '2' });
+    const [entry] = await service.saveEntries([{ ...ENTRY, matterId: matter.id }]);
     storage.failKey = 'entries';
     await expect(service.setEntryStatus([entry!.id], 'released')).rejects.toThrow('ENOSPC');
     const [saved] = await service.saveEntries([{ ...entry!, narrative: 'Rettet' }]);
     expect(saved).toMatchObject({ status: 'draft', narrative: 'Rettet' });
     expect((await storage.read<TimeEntry[]>('entries'))![0]).toMatchObject({ status: 'draft' });
+  });
+
+  it('does not show captured time as deleted when the delete could not be saved', async () => {
+    const storage = new FlakyStorage();
+    const segment: ActivitySegment = { id: 's1', start: new Date(2026, 9, 5, 9).getTime(), end: new Date(2026, 9, 5, 10).getTime(), app: 'chrome', appName: 'Chrome', title: 'Netbank - Google Chrome' };
+    await storage.write('activity/2026-10-05', [segment]);
+    const service = new PlannerService({ storage, platform, clock: () => new Date(2026, 9, 7, 12).getTime() });
+    await service.init();
+    storage.failKey = 'activity/2026-10-05';
+    await expect(service.deleteActivities('2026-10-05', ['s1'])).rejects.toThrow('ENOSPC');
+    expect((await service.getDay('2026-10-05')).activities.map((a) => a.id)).toEqual(['s1']);
+  });
+
+  it('keeps the matter link of an entry edited while matters.json could not be read', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'planner-matters-'));
+    const first = new PlannerService({ storage: new FileStorage(dir), platform });
+    await first.init();
+    const m = await first.saveMatter({ clientNumber: '400100', matterNumber: '000004', clientName: 'Vestkyst', matterName: 'Charterparti' });
+    const [entry] = await first.saveEntries([{ ...ENTRY, matterId: m.id }]);
+    await first.dispose();
+
+    // A hand edit breaks matters.json, so it is set aside at start-up and no matters load.
+    const good = readFileSync(join(dir, 'matters.json'), 'utf8');
+    writeFileSync(join(dir, 'matters.json'), good.slice(0, -2), 'utf8');
+    const second = new PlannerService({ storage: new FileStorage(dir), platform });
+    await second.init();
+    expect(await second.listMatters()).toHaveLength(0);
+    await second.saveEntries([{ ...entry!, narrative: 'Møde med klient' }]);
+    await second.dispose();
+
+    // Once matters.json is restored, the entry still belongs to its matter.
+    writeFileSync(join(dir, 'matters.json'), good, 'utf8');
+    const third = new PlannerService({ storage: new FileStorage(dir), platform });
+    await third.init();
+    expect((await third.getDay('2026-10-07')).entries[0]!.matterId).toBe(m.id);
   });
 
   it('does not keep matter changes whose save failed', async () => {
@@ -197,17 +237,19 @@ describe('PlannerService deleting a segment that just closed (data-6)', () => {
 });
 
 describe('PlannerService unknown matters (data-8)', () => {
-  it('drops a matter id that no longer exists, so the entry cannot be released with it', async () => {
+  it('keeps the link to a deleted matter but does not release the entry', async () => {
     const service = new PlannerService({ storage: new MemoryStorage(), platform });
     await service.init();
     const m = await service.saveMatter({ clientNumber: '1', matterNumber: '2', clientName: 'A', matterName: 'B' });
     const [entry] = await service.saveEntries([{ ...ENTRY, matterId: m.id }]);
-    expect(entry!.matterId).toBe(m.id);
     await service.deleteEntries([entry!.id]);
     await service.deleteMatter(m.id);
 
-    // Undo restores the deleted entry from its snapshot.
+    // Undo restores the deleted entry from its snapshot. The link is kept, because matters.json
+    // may only be unreadable for a while, but the entry cannot be released without the matter.
     const [restored] = await service.saveEntries([entry!]);
-    expect(restored!.matterId).toBeNull();
+    expect(restored!.matterId).toBe(m.id);
+    expect(await service.setEntryStatus([restored!.id], 'released')).toEqual([]);
+    expect((await service.getDay('2026-10-07')).entries[0]).toMatchObject({ status: 'draft' });
   });
 });
