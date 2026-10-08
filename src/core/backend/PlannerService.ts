@@ -67,8 +67,9 @@ const KEYS = {
 };
 
 /** How often the day's activity file is rewritten while tracking. Each flush rewrites the whole
- *  file, so this bounds disk writes; a crash loses at most this much. Quitting, locking and sleep
- *  flush at once. */
+ *  file, so this bounds disk writes; a crash loses at most this much. Quitting Planner, installing
+ *  an update, locking and sleep flush at once, and so does a Windows shutdown or log-off once the
+ *  main window has been opened (Windows sends no quit event then). */
 const ACTIVITY_FLUSH_MS = 30_000;
 const MAX_CACHED_DAYS = 14;
 /** How long a deleted, already closed segment is remembered: long enough for a queued close event. */

@@ -79,10 +79,13 @@ export function MatterPicker({ value, matters, onChange, suggestions = [], recen
     };
     section(t('editor.suggestions'), suggestions, <Sparkles />);
     section(t('editor.recent'), recent);
-    // Without a query only the first matters are listed; typing searches all of them.
-    section(t('editor.allMatters'), live.slice(0, ALL_MATTERS_LIMIT));
+    // Without a query only the first matters are listed; typing searches all of them. The selected
+    // matter is always listed, so its check mark shows.
+    const head = live.slice(0, ALL_MATTERS_LIMIT);
+    if (selected && !head.includes(selected)) head.unshift(selected);
+    section(t('editor.allMatters'), head);
     return out;
-  }, [open, sorted, query, suggestions, recent, t]);
+  }, [open, sorted, query, suggestions, recent, selected, t]);
 
   const selectable = rows.flatMap((r, i) => (r.kind === 'matter' ? [i] : []));
 

@@ -237,6 +237,10 @@ test.describe('other views', () => {
     await expect(page.getByRole('option')).toHaveCount(1);
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('matter-picker')).toContainText('Testklient 150 ApS');
+
+    // The selected matter sorts after the first 100, but is still listed and checked.
+    await page.getByTestId('matter-picker').click();
+    await expect(page.getByRole('option', { selected: true })).toContainText('Testklient 150 ApS');
   });
 
   test('lists entries and exports them as CSV', async ({ page }) => {
