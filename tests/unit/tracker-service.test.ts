@@ -6,6 +6,7 @@ import { MemoryStorage } from '@core/backend/storage';
 import { generateDemoDay, seedDemoData } from '@core/demo/generate';
 import { buildCapturedBlocks } from '@core/activity/aggregate';
 import type { ActivitySegment } from '@core/model';
+import { rowsToMatters } from '@core/matters';
 
 const OPTIONS: TrackerOptions = {
   enabled: true,
@@ -49,6 +50,16 @@ function harness() {
 }
 
 describe('ActivityTracker', () => {
+  it('ends the segment at the last input when the screen locks automatically', async () => {
+    const h = harness();
+    await h.tracker.tick();
+    await h.advance(10 * 60_000);
+    h.setIdle(240); // no input for 4 minutes, below the 5-minute idle threshold
+    h.tracker.suspend();
+    const [segment] = h.closed();
+    expect(segment!.end).toBe(h.now() - 240_000);
+  });
+
   it('records a segment per window and closes it on switch', async () => {
     const h = harness();
     await h.tracker.tick();
@@ -145,6 +156,17 @@ describe('PlannerService', () => {
     await reloaded.exportEntries('2026-10-01', '2026-10-31');
     expect(platform.saved.at(-1)).toContain('Review');
     expect(platform.saved.at(-1)).toContain('1,00');
+  });
+
+  it('keeps the billing type of existing matters when the import has no billing column', async () => {
+    const service = new PlannerService({ storage: new MemoryStorage(), platform });
+    await service.init();
+    await service.saveMatter({ clientNumber: '100', matterNumber: '1', clientName: 'Intern', matterName: 'Admin', billingType: 'nonBillable' });
+    const mapping = { clientNumber: 0, clientName: 1, matterNumber: 2, matterName: 3, code: -1, billingType: -1, keywords: -1 };
+    await service.importMatters(rowsToMatters([['100', 'Intern', '1', 'Admin'], ['200', 'Ny klient', '1', 'Rådgivning']], mapping));
+    const matters = await service.listMatters();
+    expect(matters.find((m) => m.clientNumber === '100')?.billingType).toBe('nonBillable');
+    expect(matters.find((m) => m.clientNumber === '200')?.billingType).toBe('billable');
   });
 
   it('prevents duplicate matter codes and deleting matters in use', async () => {

@@ -108,10 +108,13 @@ export class ActivityTracker {
     void this.tick();
   }
 
-  /** The system is locked or sleeping: stop the current segment immediately. */
+  /** The system is locked or sleeping: stop the current segment at the last input, so the
+   *  idle minutes before an automatic lock or sleep are not counted as work. */
   suspend(): void {
     this.suspended = true;
-    this.closeOpen(this.clock());
+    const now = this.clock();
+    const lastInput = now - Math.max(0, this.idle.getIdleSeconds()) * 1000;
+    this.closeOpen(Math.max(this.open?.segment.start ?? now, lastInput));
     if (this.status.state !== 'paused' && this.status.state !== 'disabled') this.setStatus('idle', null);
   }
 
