@@ -50,6 +50,11 @@ describe('csv', () => {
     const rows = [['a', 'b;c', 'd"e'], ['1', '2', '3']];
     expect(parseCsv(toCsv(rows, ';'))).toEqual(rows);
   });
+
+  it('keeps text that looks like a formula as text', () => {
+    const csv = toCsv([['=HYPERLINK("https://x.example")', '- Telefonmøde', '+45 2233 4455', '@SUM(A1)', 'Review', '1,50', 2]], ';');
+    expect(parseCsv(csv)).toEqual([["'=HYPERLINK(\"https://x.example\")", "'- Telefonmøde", "'+45 2233 4455", "'@SUM(A1)", 'Review', '1,50', '2']]);
+  });
 });
 
 describe('matters', () => {

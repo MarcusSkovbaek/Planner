@@ -1,5 +1,5 @@
 import type { ActivityKind, ActivitySegment } from '../model';
-import { minuteOfDay } from '../time';
+import { dateKeyOf, MINUTES_PER_DAY, MS_PER_MINUTE, minuteOfDay } from '../time';
 import { parseActivity } from './parse';
 
 /** A merged, display-ready unit of captured time (one document, e-mail thread, tab…). */
@@ -113,7 +113,13 @@ export function totalActiveMs(segments: readonly ActivitySegment[], excludedApps
 export function blockMinutes(block: Pick<CapturedBlock, 'start' | 'end'>): { startMin: number; endMin: number } {
   const startMin = minuteOfDay(block.start);
   let endMin = minuteOfDay(block.end);
-  if (endMin < startMin) endMin = 24 * 60; // crosses midnight; segments are split, but be defensive
+  if (endMin < startMin) {
+    endMin =
+      dateKeyOf(block.end) === dateKeyOf(block.start)
+        ? // The clock went back an hour (end of daylight saving time): keep the real length.
+          Math.min(MINUTES_PER_DAY, startMin + (block.end - block.start) / MS_PER_MINUTE)
+        : MINUTES_PER_DAY; // crosses midnight; segments are split, but be defensive
+  }
   return { startMin, endMin };
 }
 

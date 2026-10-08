@@ -233,6 +233,7 @@ export class PlannerService implements PlannerApi {
 
   deleteEntries(ids: string[]): Promise<void> {
     return this.enqueue(async () => {
+      if (ids.some((id) => this.entries.get(id)?.status === 'released')) fail(ApiErrorCode.EntryLocked);
       const removed = ids.filter((id) => this.entries.delete(id));
       if (!removed.length) return;
       await this.persistEntries();

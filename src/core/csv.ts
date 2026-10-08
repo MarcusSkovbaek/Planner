@@ -65,8 +65,17 @@ function quote(value: string, delimiter: Delimiter): string {
   return value;
 }
 
+/** Text that spreadsheets would evaluate as a formula (=, +, -, @, tab, carriage return). */
+const FORMULA_START = /^[=+\-@\t\r]/;
+
+/** Keeps text cells as text: Excel would otherwise run them as formulas, e.g. a narrative
+ *  copied from an e-mail subject such as =HYPERLINK(…) or "- Telefonmøde". */
+function asText(value: string | number): string {
+  return typeof value === 'string' && FORMULA_START.test(value) ? `'${value}` : String(value);
+}
+
 /** Serialises rows. Prefixes a UTF-8 BOM so Excel detects the encoding (æ, ø, å). */
 export function toCsv(rows: readonly (readonly (string | number)[])[], delimiter: Delimiter = ';'): string {
-  const body = rows.map((r) => r.map((v) => quote(String(v), delimiter)).join(delimiter)).join('\r\n');
+  const body = rows.map((r) => r.map((v) => quote(asText(v), delimiter)).join(delimiter)).join('\r\n');
   return `﻿${body}\r\n`;
 }

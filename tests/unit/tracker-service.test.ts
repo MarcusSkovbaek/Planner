@@ -135,6 +135,7 @@ describe('PlannerService', () => {
     expect(entry).toMatchObject({ status: 'draft', billingType: 'billable' });
     await service.setEntryStatus([entry!.id], 'released');
     await expect(service.saveEntries([{ ...entry!, narrative: 'changed' }])).rejects.toThrow('ENTRY_LOCKED');
+    await expect(service.deleteEntries([entry!.id])).rejects.toThrow('ENTRY_LOCKED');
 
     const reloaded = new PlannerService({ storage, platform });
     await reloaded.init();

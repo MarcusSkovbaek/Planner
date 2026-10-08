@@ -320,10 +320,8 @@ export const usePlanner = create<PlannerState>((set, get) => {
             await api().deleteEntries(action.ids);
             upsertEntries([], action.ids);
           } else if (action.kind === 'restore') {
-            const current = new Map(get().entries.map((e) => [e.id, e]));
-            // Released versions must be reopened before they can be overwritten.
-            const locked = action.entries.filter((e) => current.get(e.id)?.status === 'released').map((e) => e.id);
-            if (locked.length) await api().setEntryStatus(locked, 'draft');
+            // Released entries stay locked: the backend refuses to overwrite them, so undo
+            // never silently reopens an entry that was released, for example from the list.
             const saved = await api().saveEntries(action.entries);
             upsertEntries(saved);
           } else {
