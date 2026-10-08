@@ -19,7 +19,8 @@ const LIVE_WINDOW_MS = 20_000;
 export function usePlannerData() {
   const settings = useApp((s) => s.settings);
   const matters = useApp((s) => s.matters);
-  const trackingState = useApp((s) => s.tracking.state);
+  // Only set while a tracked window is in front (not Planner itself, excluded apps or idle).
+  const currentApp = useApp((s) => s.tracking.current?.app);
   const date = usePlanner((s) => s.date);
   const entries = usePlanner((s) => s.entries);
   const activities = usePlanner((s) => s.activities);
@@ -40,10 +41,10 @@ export function usePlannerData() {
       return {
         ...b,
         converted: b.activeMs ? Math.min(1, linkedMs / b.activeMs) : 0,
-        live: isToday && trackingState === 'active' && b.end === latest && Date.now() - latest < LIVE_WINDOW_MS,
+        live: isToday && b.app === currentApp && b.end === latest && Date.now() - latest < LIVE_WINDOW_MS,
       };
     });
-  }, [activities, mergeGapMs, excludedApps, linked, date, trackingState]);
+  }, [activities, mergeGapMs, excludedApps, linked, date, currentApp]);
 
   const blocks = useMemo(
     () =>
