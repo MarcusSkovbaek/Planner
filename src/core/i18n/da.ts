@@ -191,6 +191,7 @@ export const da = {
     activityDeleted: 'Opfanget tid slettet',
     appExcluded: '{app} opfanges ikke længere',
     exported: 'Eksport gemt',
+    exportFailed: 'Eksporten kunne ikke gemmes. Luk filen, hvis den er åben i Excel, og prøv igen.',
     locked: 'Registreringen er frigivet og låst',
     nothingToRelease: 'Der er ingen registreringer at frigive',
     missingMatter: 'Vælg en sag, før registreringen frigives',

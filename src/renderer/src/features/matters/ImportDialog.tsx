@@ -2,7 +2,7 @@ import './matters.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileUp, Upload } from 'lucide-react';
 import { parseCsv } from '@core/csv';
-import { detectMatterColumns, MATTER_FIELDS, matterCode, rowsToMatters, type MatterField } from '@core/matters';
+import { detectMatterColumns, hasHeaderRow, MATTER_FIELDS, matterCode, rowsToMatters, type MatterField } from '@core/matters';
 import { useApp } from '@/state/app';
 import { toast } from '@/state/toast';
 import { useI18n } from '@/lib/i18n';
@@ -31,24 +31,26 @@ function ImportForm({ onClose }: { onClose(): void }) {
   const { t } = useI18n();
   const importMatters = useApp((s) => s.importMatters);
   const [text, setText] = useState('');
-  const [hasHeader, setHasHeader] = useState(true);
+  // null until the user ticks or unticks the box: detect it from the first row.
+  const [hasHeader, setHasHeader] = useState<boolean | null>(null);
   const [mapping, setMapping] = useState<Record<MatterField, number> | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const rows = useMemo(() => (text.trim() ? parseCsv(text) : []), [text]);
   const columnCount = rows.reduce((max, r) => Math.max(max, r.length), 0);
-  const headers = hasHeader && rows[0] ? rows[0] : Array.from({ length: columnCount }, (_, i) => `#${i + 1}`);
-  const body = hasHeader ? rows.slice(1) : rows;
+  const headerRow = hasHeader ?? hasHeaderRow(rows);
+  const headers = headerRow && rows[0] ? rows[0] : Array.from({ length: columnCount }, (_, i) => `#${i + 1}`);
+  const body = headerRow ? rows.slice(1) : rows;
 
   useEffect(() => {
     if (!rows.length) {
       setMapping(null);
       return;
     }
-    const detected = detectMatterColumns(hasHeader ? rows[0]! : []);
+    const detected = detectMatterColumns(headerRow ? rows[0]! : []);
     // Without recognisable headers, assume the common order: client no, client, matter no, matter.
-    if (!hasHeader || Object.values(detected).every((v) => v < 0)) {
+    if (!headerRow || Object.values(detected).every((v) => v < 0)) {
       const guess = { clientNumber: 0, clientName: 1, matterNumber: 2, matterName: 3, code: -1, billingType: -1, keywords: -1 };
       for (const key of MATTER_FIELDS) if (guess[key] >= columnCount) guess[key] = -1;
       setMapping(guess);
@@ -56,7 +58,7 @@ function ImportForm({ onClose }: { onClose(): void }) {
       setMapping(detected);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, hasHeader]);
+  }, [text, headerRow]);
 
   const inputs = useMemo(() => (mapping ? rowsToMatters(body, mapping).filter((m) => m.clientNumber && m.matterNumber) : []), [body, mapping]);
 
@@ -135,7 +137,7 @@ function ImportForm({ onClose }: { onClose(): void }) {
         {mapping && rows.length > 0 && (
           <>
             <label className="toggle-label">
-              <input type="checkbox" className="checkbox" checked={hasHeader} onChange={(e) => setHasHeader(e.target.checked)} />
+              <input type="checkbox" className="checkbox" checked={headerRow} onChange={(e) => setHasHeader(e.target.checked)} />
               {t('matters.hasHeader')}
             </label>
             <div className="import-section-title">{t('matters.mapping')}</div>

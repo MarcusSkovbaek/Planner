@@ -192,6 +192,7 @@ export const en: Dictionary = {
     activityDeleted: 'Captured time deleted',
     appExcluded: '{app} is no longer captured',
     exported: 'Export saved',
+    exportFailed: 'The export could not be saved. Close the file if it is open in Excel and try again.',
     locked: 'This entry is released and locked',
     nothingToRelease: 'There are no entries to release',
     missingMatter: 'Select a matter before releasing',

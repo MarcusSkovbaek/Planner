@@ -3,7 +3,7 @@
 export type Delimiter = ',' | ';' | '\t';
 
 export function detectDelimiter(text: string): Delimiter {
-  const firstLine = text.replace(/^﻿/, '').split(/\r?\n/, 1)[0] ?? '';
+  const firstLine = text.replace(/^\uFEFF/, '').split(/\r?\n/, 1)[0] ?? '';
   const counts: Record<Delimiter, number> = { ',': 0, ';': 0, '\t': 0 };
   let inQuotes = false;
   for (const ch of firstLine) {
@@ -15,7 +15,7 @@ export function detectDelimiter(text: string): Delimiter {
 }
 
 export function parseCsv(input: string, delimiter: Delimiter = detectDelimiter(input)): string[][] {
-  const text = input.replace(/^﻿/, '');
+  const text = input.replace(/^\uFEFF/, '');
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
@@ -77,5 +77,5 @@ function asText(value: string | number): string {
 /** Serialises rows. Prefixes a UTF-8 BOM so Excel detects the encoding (æ, ø, å). */
 export function toCsv(rows: readonly (readonly (string | number)[])[], delimiter: Delimiter = ';'): string {
   const body = rows.map((r) => r.map((v) => quote(asText(v), delimiter)).join(delimiter)).join('\r\n');
-  return `﻿${body}\r\n`;
+  return `\uFEFF${body}\r\n`;
 }
