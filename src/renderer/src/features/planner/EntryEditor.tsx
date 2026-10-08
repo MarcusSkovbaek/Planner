@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, Copy, Link2Off, Lock, LockOpen, Trash2, X } from 'lucide-react';
-import { buildCapturedBlocks } from '@core/activity/aggregate';
+import { blockTexts, buildCapturedBlocks } from '@core/activity/aggregate';
 import { appDisplayName } from '@core/activity/apps';
 import { suggestMatters } from '@core/matters';
 import { BILLING_TYPES, type BillingType, type Matter, type TimeEntry } from '@core/model';
@@ -151,7 +151,7 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
   }, [entry.activityIds, data.activities]);
 
   const suggestions = useMemo<Matter[]>(
-    () => suggestMatters([narrative, ...sources.flatMap((s) => [s.subject, ...s.titles])], matters, 3).map((s) => s.matter),
+    () => suggestMatters([narrative, ...sources.flatMap(blockTexts)], matters, 3).map((s) => s.matter),
     [narrative, sources, matters],
   );
   const recent = useMemo<Matter[]>(() => {

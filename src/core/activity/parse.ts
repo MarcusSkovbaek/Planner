@@ -46,7 +46,7 @@ function parseOutlook(subject: string): { kind: ActivityKind; subject: string } 
   let s = subject.replace(EMAIL_ADDRESS, '');
   const message = /\s+[-–]\s+(message|meddelelse)(\s*\([^)]*\))?\s*$/i;
   if (message.test(s)) return { kind: 'email', subject: s.replace(message, '') };
-  const meeting = /\s+[-–]\s+(meeting|meeting occurrence|møde|mødeindkaldelse|appointment|aftale|event|begivenhed)\s*$/i;
+  const meeting = /\s+[-–]\s+(meeting|meeting occurrence|meeting series|møde|mødeindkaldelse|mødeserie|appointment|appointment series|aftale|aftaleserie|event|begivenhed)\s*$/i;
   if (meeting.test(s)) return { kind: 'calendar', subject: s.replace(meeting, '') };
   if (/^(calendar|kalender)\b/i.test(s)) {
     s = s.split(/\s+[-–]\s+/)[0] ?? s;

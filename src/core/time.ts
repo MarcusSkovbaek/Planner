@@ -91,13 +91,20 @@ export function formatClock(minute: number): string {
   return `${pad(Math.floor(clamped / 60))}:${pad(clamped % 60)}`;
 }
 
-/** Parses `9`, `930`, `9:30`, `09.30`, `9,5` (hours) into minutes after midnight. */
+/** Parses `9`, `930`, `9:30`, `09.30`, `9,30` and `9,5` (decimal hours) into minutes after midnight. */
 export function parseClock(input: string): number | null {
   const text = input.trim();
   if (!text) return null;
+  // One digit after a comma means decimal hours, as in the hours field: 9,5 is 09:30. With two
+  // digits the comma separates minutes (9,30 is 09:30), as typed with a Danish numeric keypad.
+  const dec = text.match(/^(\d{1,2}),(\d)$/);
+  if (dec) {
+    const hours = Number(`${dec[1]}.${dec[2]}`);
+    return hours <= 24 ? Math.round(hours * 60) : null;
+  }
   let h: number;
   let m: number;
-  const sep = text.match(/^(\d{1,2})[:.](\d{1,2})$/);
+  const sep = text.match(/^(\d{1,2})[:.,](\d{2})$/) ?? text.match(/^(\d{1,2})[:.](\d)$/);
   if (sep) {
     h = Number(sep[1]);
     m = Number(sep[2]);
