@@ -14,13 +14,31 @@ const SEPARATOR = String.raw`\s+[-–—|]\s+`;
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/** Compiled suffix patterns per suffix list: building them per call dominated parsing. */
+const suffixCache = new Map<string, { re: RegExp; lower: string }[]>();
+
+function suffixPatterns(suffixes: readonly string[]): { re: RegExp; lower: string }[] {
+  const key = suffixes.join('\n');
+  let patterns = suffixCache.get(key);
+  if (!patterns) {
+    patterns = [...suffixes]
+      .sort((a, b) => b.length - a.length)
+      .map((suffix) => ({
+        re: new RegExp(`${SEPARATOR}${escapeRegExp(suffix.replace(INVISIBLE, ''))}(\\s*\\([^)]*\\))?\\s*$`, 'i'),
+        lower: suffix.toLowerCase(),
+      }));
+    if (suffixCache.size > 500) suffixCache.clear();
+    suffixCache.set(key, patterns);
+  }
+  return patterns;
+}
+
 function stripSuffixes(title: string, suffixes: readonly string[] | undefined): string {
   if (!suffixes?.length) return title;
-  const sorted = [...suffixes].sort((a, b) => b.length - a.length);
-  for (const suffix of sorted) {
-    const re = new RegExp(`${SEPARATOR}${escapeRegExp(suffix.replace(INVISIBLE, ''))}(\\s*\\([^)]*\\))?\\s*$`, 'i');
+  const lowerTitle = title.toLowerCase();
+  for (const { re, lower } of suffixPatterns(suffixes)) {
     if (re.test(title)) return title.replace(re, '');
-    if (title.toLowerCase() === suffix.toLowerCase()) return '';
+    if (lowerTitle === lower) return '';
   }
   return title;
 }
@@ -112,8 +130,24 @@ export function cleanTitle(title: string): string {
   return title.replace(INVISIBLE, '').replace(/\s+/g, ' ').trim();
 }
 
-/** Turns a raw process + window title into something meaningful for time registration. */
+const parseCache = new Map<string, ParsedActivity>();
+const PARSE_CACHE_MAX = 5000;
+
+/** Turns a raw process + window title into something meaningful for time registration.
+ *  Memoised: a day has thousands of segments but only a few hundred distinct windows, and the
+ *  planner re-aggregates the whole day on every tracker update. */
 export function parseActivity(app: string, rawTitle: string, appName = ''): ParsedActivity {
+  const key = `${app}\u0000${appName}\u0000${rawTitle}`;
+  let parsed = parseCache.get(key);
+  if (!parsed) {
+    parsed = Object.freeze(parseActivityUncached(app, rawTitle, appName));
+    if (parseCache.size >= PARSE_CACHE_MAX) parseCache.clear();
+    parseCache.set(key, parsed);
+  }
+  return parsed;
+}
+
+function parseActivityUncached(app: string, rawTitle: string, appName: string): ParsedActivity {
   const def = APP_CATALOG[app];
   const title = cleanTitle(rawTitle);
   let kind: ActivityKind = def?.kind ?? 'other';
