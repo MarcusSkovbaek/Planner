@@ -80,7 +80,8 @@ describe('time-3: windows whose title keeps changing', () => {
     const h = harness();
     await h.tracker.tick();
     for (let i = 1; i <= 600; i++) {
-      h.setWindow({ app: 'chrome', appName: 'Chrome', title: `0:${String(i).padStart(4, '0')} · Review – Toggl Track` });
+      const clock = `0:${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}`;
+      h.setWindow({ app: 'chrome', appName: 'Chrome', title: `${clock} · Review – Toggl Track` });
       await h.step(1000);
     }
     h.setWindow(null);
@@ -90,7 +91,25 @@ describe('time-3: windows whose title keeps changing', () => {
     expect(blocks[0]!.activeMs).toBeGreaterThan(9 * 60_000);
   });
 
-  it('splits at the moment a new document title first appeared once it is stable', async () => {
+  it('credits a tab whose title keeps changing to that tab, not to the page the user came from', async () => {
+    const h = harness();
+    h.setWindow({ app: 'chrome', appName: 'Chrome', title: 'Kontrakt Vestkyst - Google Docs - Google Chrome' });
+    await h.tracker.tick();
+    for (let i = 0; i < 300; i++) await h.step(1000); // 5 minutes on the contract
+    for (let i = 0; i < 300; i++) {
+      // Then 10 minutes in Gmail, whose title flashes while a chat is pending.
+      h.setWindow({ app: 'chrome', appName: 'Chrome', title: i % 2 ? 'Anna Holm says… - Google Chrome' : 'Inbox (2) - Gmail - Google Chrome' });
+      await h.step(1000);
+      await h.step(1000);
+    }
+    h.setWindow(null);
+    await h.step(1000);
+    const contract = h.closed().filter((s) => s.title.startsWith('Kontrakt')).reduce((sum, s) => sum + s.end - s.start, 0);
+    expect(contract).toBeLessThanOrEqual(5 * 60_000 + 1000);
+    expect(h.total() - contract).toBeGreaterThan(10 * 60_000 - OPTIONS.minSegmentMs);
+  });
+
+  it('splits when a new document title appears', async () => {
     const h = harness();
     h.setWindow({ app: 'winword', appName: 'Word', title: 'A.docx - Word' });
     await h.tracker.tick();

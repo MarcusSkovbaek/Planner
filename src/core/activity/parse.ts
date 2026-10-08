@@ -93,6 +93,9 @@ const EMAIL_PREFIX = /^((re|sv|aw|fw|fwd|vs|wg|tr)\s*(\[\d+\])?\s*:\s*)+/i;
 const FILE_EXTENSION = /\.(docx?|docm|dotx|xlsx?|xlsm|xlsb|csv|pptx?|pptm|pdf|txt|rtf|msg|eml|odt|ods|odp)$/i;
 
 /** Normalises a subject so that `RE: Offer.docx` and `Offer` merge into one captured block. */
+/** A clock or timer reading such as 0:12, 12:34 or 01:02:03, which changes while the page stays the same. */
+const CLOCK_READING = /\b\d{1,2}:\d{2}(:\d{2})?\b/g;
+
 export function normalizeSubjectKey(subject: string): string {
   return subject
     .toLowerCase()
@@ -100,6 +103,7 @@ export function normalizeSubjectKey(subject: string): string {
     .replace(FILE_EXTENSION, '')
     .replace(NOTIFICATION_COUNT, '')
     .replace(TRAILING_COUNT, '')
+    .replace(CLOCK_READING, '')
     .replace(/\s+/g, ' ')
     .trim();
 }

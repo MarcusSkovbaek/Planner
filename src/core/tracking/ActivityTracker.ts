@@ -25,8 +25,6 @@ interface OpenSegment {
   /** Emitted to listeners (it has lasted at least `minSegmentMs`). */
   materialized: boolean;
   lastEmit: number;
-  /** A new title in the same window that has not yet been stable for `minSegmentMs`. */
-  pending?: { title: string; since: number };
 }
 
 const FAILURES_BEFORE_UNAVAILABLE = 3;
@@ -204,26 +202,22 @@ export class ActivityTracker {
     }
 
     const open = this.open;
-    if (open && open.segment.app === sample.app) {
-      // Within the same app a new title only counts once it has been stable for minSegmentMs, so
-      // a tab whose title keeps changing (a ticking timer, a flashing chat) stays one visit.
-      if (title === open.segment.title) open.pending = undefined;
-      else if (open.pending?.title !== title) open.pending = { title, since: now };
-
-      if (open.pending && now - open.pending.since >= this.options.minSegmentMs) {
-        // The new title has settled: that visit began when it first appeared.
-        const since = Math.max(open.pending.since, dayStartMs(dateKeyOf(now)));
-        this.closeOpen(since);
-        this.openSegment(sample, title, since, now);
-      } else if (dateKeyOf(open.segment.start) !== dateKeyOf(now)) {
-        // Never let a segment span midnight: each day is stored separately.
+    if (open && open.segment.app === sample.app && open.segment.title === title) {
+      // Never let a segment span midnight: each day is stored separately.
+      if (dateKeyOf(open.segment.start) !== dateKeyOf(now)) {
         const midnight = dayStartMs(dateKeyOf(now));
         this.closeOpen(midnight);
-        this.openSegment(sample, open.segment.title, midnight, now);
+        this.openSegment(sample, title, midnight, now);
       } else {
         open.segment.end = now;
         this.maybeEmit(open, now);
       }
+    } else if (open && !open.materialized && open.segment.app === sample.app) {
+      // A title change within the same app is not alt-tab noise: the new title takes over the
+      // time of a visit too short to keep, or a tab whose title keeps changing is never recorded.
+      // The time only ever moves forward to the page now in front, never back to an earlier one.
+      this.open = null;
+      this.openSegment(sample, title, Math.max(open.segment.start, dayStartMs(dateKeyOf(now))), now);
     } else {
       this.closeOpen(now);
       this.openSegment(sample, title, now, now);
