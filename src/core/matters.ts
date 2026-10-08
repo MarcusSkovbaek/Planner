@@ -70,12 +70,14 @@ export function rowsToMatters(rows: readonly string[][], mapping: Record<MatterF
     const matterName = get(row, 'matterName');
     const clientName = get(row, 'clientName');
     if (!clientNumber && !matterNumber && !matterName) continue;
+    const billing = get(row, 'billingType');
     out.push({
       clientNumber,
       matterNumber,
       clientName,
       matterName,
-      billingType: parseBillingType(get(row, 'billingType')),
+      // Without a value, a re-import keeps the billing type already set on the matter.
+      ...(billing ? { billingType: parseBillingType(billing) } : {}),
       keywords: get(row, 'keywords')
         .split(/[,;|]/)
         .map((k) => k.trim())

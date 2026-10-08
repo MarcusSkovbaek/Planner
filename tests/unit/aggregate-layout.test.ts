@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCapturedBlocks, suggestNarrative } from '@core/activity/aggregate';
+import { blockMinutes, buildCapturedBlocks, suggestNarrative } from '@core/activity/aggregate';
 import { layoutColumns } from '@core/layout';
 import type { ActivitySegment } from '@core/model';
 
@@ -70,5 +70,18 @@ describe('layoutColumns', () => {
   it('honours a minimum visual duration', () => {
     const laid = layoutColumns([iv(0, 1), iv(5, 6)], (x) => x, 10);
     expect(laid.every((l) => l.columns === 2)).toBe(true);
+  });
+});
+
+describe('blockMinutes', () => {
+  it('keeps the real length of a block in the repeated hour when daylight saving time ends', () => {
+    // 25 Oct 2026: 02:40 CEST (00:40 UTC) to 02:10 CET (01:10 UTC) is 30 real minutes.
+    const block = { start: Date.UTC(2026, 9, 25, 0, 40), end: Date.UTC(2026, 9, 25, 1, 10) };
+    expect(blockMinutes(block)).toEqual({ startMin: 160, endMin: 190 });
+  });
+
+  it('ends a block that crosses midnight at 24:00', () => {
+    const block = { start: new Date(2026, 9, 7, 23, 30).getTime(), end: new Date(2026, 9, 8, 0, 15).getTime() };
+    expect(blockMinutes(block)).toEqual({ startMin: 1410, endMin: 1440 });
   });
 });

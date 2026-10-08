@@ -4,7 +4,7 @@ import { buildCapturedBlocks } from '@core/activity/aggregate';
 import { appDisplayName } from '@core/activity/apps';
 import { suggestMatters } from '@core/matters';
 import { BILLING_TYPES, type BillingType, type Matter, type TimeEntry } from '@core/model';
-import { clamp, formatClock, MINUTES_PER_DAY, parseClock, snapMinutes } from '@core/time';
+import { clamp, formatClock, MINUTES_PER_DAY, parseClock, roundDuration } from '@core/time';
 import { useApp } from '@/state/app';
 import { usePlanner } from '@/state/planner';
 import { useI18n } from '@/lib/i18n';
@@ -125,13 +125,13 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
     const current = latest();
     const parsed = parseClock(endText);
     if (parsed === null || parsed <= current.startMin) return setEndText(formatClock(current.endMin));
-    commitTimes(current.startMin, current.startMin + Math.max(inc, snapMinutes(parsed - current.startMin, inc, 'round')));
+    commitTimes(current.startMin, current.startMin + roundDuration(parsed - current.startMin, inc, settings.timesheet.roundingMode));
   };
   const commitHours = () => {
     const current = latest();
     const h = parseHoursInput(hoursText);
     if (h === null || h <= 0) return setHoursText(hoursValue(current.endMin - current.startMin));
-    const length = Math.max(inc, snapMinutes(h * 60, inc, 'round'));
+    const length = roundDuration(h * 60, inc, settings.timesheet.roundingMode);
     commitTimes(current.startMin, current.startMin + length);
   };
   const onEnter = (commit: () => void) => (e: React.KeyboardEvent<HTMLInputElement>) => {
