@@ -240,7 +240,8 @@ export class SecureUpdater {
       if (name === keep) continue;
       await fs.rm(join(this.options.downloadDir, name), { force: true }).catch(() => undefined);
     }
-    if (!keep) this.readyFile = null;
+    // Forget a ready download that was just deleted (e.g. replaced by a newer version).
+    if (!keep || this.readyFile !== join(this.options.downloadDir, keep)) this.readyFile = null;
   }
 
   private async fail(err: unknown): Promise<UpdateStatus> {
@@ -252,8 +253,9 @@ export class SecureUpdater {
       this.readyFile = null;
       this.manifest = null;
       await this.cleanup(null);
-    } else if (this.readyFile && this.manifest) {
-      // A transient network error must not hide an update that is already verified.
+    } else if (this.manifest && this.readyFile === join(this.options.downloadDir, this.manifest.file)) {
+      // A transient network error must not hide an update that is already verified, as long as
+      // it is the version on offer (a newer one may have been found since it was downloaded).
       return this.set({ state: 'ready', availableVersion: this.manifest.version, notes: this.manifest.notes });
     }
     return this.set({ state: 'error', error: code, checkedAt: this.clock() }, true);

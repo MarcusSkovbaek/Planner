@@ -4,7 +4,11 @@ import { UpdateError } from './manifest';
 import type { UpdateTransport } from './SecureUpdater';
 
 const MAX_REDIRECTS = 5;
-const TIMEOUT_MS = 60_000;
+/** A request fails when no data arrives for this long. */
+const IDLE_TIMEOUT_MS = 60_000;
+/** Limits on a whole request, so a connection that trickles data cannot keep a check busy for good. */
+const MANIFEST_DEADLINE_MS = 60_000;
+const DOWNLOAD_DEADLINE_MS = 2 * 60 * 60_000;
 
 let updaterSession: Session | null = null;
 
@@ -20,7 +24,7 @@ function getSession(): Session {
   return updaterSession;
 }
 
-function request(url: string, onResponse: (response: Electron.IncomingMessage, done: (err?: Error) => void) => void): Promise<void> {
+function request(url: string, deadlineMs: number, onResponse: (response: Electron.IncomingMessage, done: (err?: Error) => void) => void): Promise<void> {
   if (!url.startsWith('https://')) return Promise.reject(new UpdateError('INSECURE_URL', url));
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -28,15 +32,24 @@ function request(url: string, onResponse: (response: Electron.IncomingMessage, d
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(deadline);
       if (err) reject(err);
       else resolve();
     };
     const req = net.request({ url, session: getSession(), redirect: 'manual', credentials: 'omit', useSessionCookies: false, cache: 'no-store' });
     // Note: settle before aborting, because abort() emits 'abort' synchronously.
-    const timer = setTimeout(() => {
+    const timeOut = () => {
       finish(new UpdateError('NETWORK', 'timeout'));
       req.abort();
-    }, TIMEOUT_MS);
+    };
+    const deadline = setTimeout(timeOut, deadlineMs);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const armTimeout = () => {
+      if (settled) return;
+      clearTimeout(timer);
+      timer = setTimeout(timeOut, IDLE_TIMEOUT_MS);
+    };
+    armTimeout();
     let redirects = 0;
     req.setHeader('User-Agent', `Planner/${app.getVersion()}`);
     req.on('redirect', (_status, _method, redirectUrl) => {
@@ -53,6 +66,9 @@ function request(url: string, onResponse: (response: Electron.IncomingMessage, d
         req.abort();
         return;
       }
+      // A large installer on a slow line may take many minutes; only a stalled one fails.
+      armTimeout();
+      response.on('data', armTimeout);
       onResponse(response, (err) => {
         finish(err);
         if (err) req.abort();
@@ -68,7 +84,7 @@ export const electronTransport: UpdateTransport = {
   async fetchText(url, maxBytes) {
     const chunks: Buffer[] = [];
     let size = 0;
-    await request(url, (response, done) => {
+    await request(url, MANIFEST_DEADLINE_MS, (response, done) => {
       response.on('data', (chunk: Buffer) => {
         size += chunk.length;
         if (size > maxBytes) return done(new UpdateError('TOO_LARGE'));
@@ -84,7 +100,7 @@ export const electronTransport: UpdateTransport = {
     const file = createWriteStream(destination, { flags: 'w' });
     let received = 0;
     try {
-      await request(url, (response, done) => {
+      await request(url, DOWNLOAD_DEADLINE_MS, (response, done) => {
         response.on('data', (chunk: Buffer) => {
           received += chunk.length;
           if (received > maxBytes) return done(new UpdateError('TOO_LARGE'));
