@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { CheckCircle2, CircleDashed, Lock } from 'lucide-react';
+import { CalendarDays, CheckCircle2, CircleDashed, Lock } from 'lucide-react';
 import type { Matter, TimeEntry } from '@core/model';
 import { matterCode } from '@core/matters';
 import { formatClock } from '@core/time';
@@ -7,7 +7,8 @@ import { appDisplayName } from '@core/activity/apps';
 import { blockMinutes } from '@core/activity/aggregate';
 import type { LaidOut } from '@core/layout';
 import { cx } from '@/lib/cx';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type TFunction } from '@/lib/i18n';
+import { timeOfDay } from '@/lib/format';
 import { KindIcon } from '@/components/shell/KindIcon';
 import type { BlockView } from './usePlannerData';
 
@@ -117,14 +118,28 @@ interface CapturedCardProps {
   onActivate(block: BlockView, toggle: boolean): void;
 }
 
-export const CapturedCard = memo(function CapturedCard({ block, layout, pxPerMin, selected, onPointerDown, onDoubleClick, onContextMenu, onHover, onActivate }: CapturedCardProps) {
-  const { t, duration, language } = useI18n();
+/** Size and text room of a block in the captured column. */
+function blockGeometry(block: BlockView, pxPerMin: number) {
   const { startMin, endMin } = blockMinutes(block);
-  const top = startMin * pxPerMin;
   const height = Math.max(20, (endMin - startMin) * pxPerMin - 2);
   const inner = height - 8;
   const showMeta = inner >= 32;
   const subjectLines = Math.min(4, Math.max(1, Math.floor((inner - (showMeta ? 15 : 0)) / 16.2)));
+  return { top: startMin * pxPerMin, height, showMeta, subjectLines };
+}
+
+/** Space selects, Enter on a selected block creates an entry from it. */
+function blockKeyDown(event: React.KeyboardEvent, block: BlockView, selected: boolean, props: Pick<CapturedCardProps, 'onDoubleClick' | 'onActivate'>) {
+  if (event.key !== ' ' && event.key !== 'Enter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.key === 'Enter' && selected) props.onDoubleClick(block);
+  else props.onActivate(block, event.ctrlKey || event.metaKey);
+}
+
+export const CapturedCard = memo(function CapturedCard({ block, layout, pxPerMin, selected, onPointerDown, onDoubleClick, onContextMenu, onHover, onActivate }: CapturedCardProps) {
+  const { t, duration, language } = useI18n();
+  const { top, height, showMeta, subjectLines } = blockGeometry(block, pxPerMin);
   const converted = block.converted >= 0.98;
   const partly = !converted && block.converted > 0.02;
   const appName = appDisplayName(block.app, language, block.appName);
@@ -147,14 +162,7 @@ export const CapturedCard = memo(function CapturedCard({ block, layout, pxPerMin
       onContextMenu={(e) => onContextMenu(e, block)}
       onPointerEnter={(e) => onHover(block, e.currentTarget)}
       onPointerLeave={() => onHover(null)}
-      onKeyDown={(e) => {
-        if (e.key === ' ' || e.key === 'Enter') {
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.key === 'Enter' && selected) onDoubleClick(block);
-          else onActivate(block, e.ctrlKey || e.metaKey);
-        }
-      }}
+      onKeyDown={(e) => blockKeyDown(e, block, selected, { onDoubleClick, onActivate })}
       tabIndex={0}
       role="button"
       aria-pressed={selected}
@@ -173,6 +181,63 @@ export const CapturedCard = memo(function CapturedCard({ block, layout, pxPerMin
         <div className="cc-meta truncate">
           {appName} · <span className="tabular">{duration(block.activeMs)}</span>
           {block.visits > 1 && <> · {t('planner.visits', { n: block.visits })}</>}
+        </div>
+      )}
+    </div>
+  );
+});
+
+/** Where a meeting takes place, as shown on its card: Teams meetings say so instead of the link text. */
+export function meetingPlace(meeting: NonNullable<BlockView['meeting']>, t: TFunction): string {
+  return meeting.teams ? t('planner.teamsMeeting') : meeting.location;
+}
+
+/** A meeting from the calendar, suggested in the captured column and used the same way. */
+export const MeetingCard = memo(function MeetingCard({ block, layout, pxPerMin, selected, onPointerDown, onDoubleClick, onContextMenu, onHover, onActivate }: CapturedCardProps) {
+  const { t } = useI18n();
+  const meeting = block.meeting!;
+  const { top, height, showMeta, subjectLines } = blockGeometry(block, pxPerMin);
+  const converted = block.converted >= 0.98;
+  const subject = meeting.subject || t('planner.meetingNoSubject');
+  const time = `${timeOfDay(meeting.start)}–${timeOfDay(meeting.end)}`;
+  const place = meetingPlace(meeting, t);
+  const label = [t('planner.meetingFromCalendar'), subject, time, place, meeting.tentative && t('planner.tentative'), converted && t('planner.converted')];
+
+  return (
+    <div
+      className={cx(
+        'captured-card meeting-card kind-calendar',
+        sizeClass(height),
+        selected && 'selected',
+        converted && 'converted',
+        meeting.tentative && 'tentative',
+      )}
+      style={{ top, height, ...horizontal(layout) }}
+      data-testid="meeting-card"
+      data-block-id={block.id}
+      onPointerDown={(e) => onPointerDown(e, block)}
+      onDoubleClick={() => onDoubleClick(block)}
+      onContextMenu={(e) => onContextMenu(e, block)}
+      onPointerEnter={(e) => onHover(block, e.currentTarget)}
+      onPointerLeave={() => onHover(null)}
+      onKeyDown={(e) => blockKeyDown(e, block, selected, { onDoubleClick, onActivate })}
+      tabIndex={0}
+      role="button"
+      aria-pressed={selected}
+      aria-label={label.filter(Boolean).join(', ')}
+    >
+      <div className="cc-head">
+        <CalendarDays className="cc-icon" aria-hidden="true" />
+        <span className={cx('cc-subject', !meeting.subject && 'cc-untitled')} style={{ WebkitLineClamp: subjectLines }}>
+          {subject}
+        </span>
+        {converted && <CheckCircle2 className="cc-status" aria-hidden="true" />}
+      </div>
+      {showMeta && (
+        <div className="cc-meta truncate">
+          <span className="tabular">{time}</span>
+          {place && <> · {place}</>}
+          {meeting.tentative && <> · {t('planner.tentative')}</>}
         </div>
       )}
     </div>

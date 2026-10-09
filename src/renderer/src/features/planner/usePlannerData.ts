@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { buildCapturedBlocks, type CapturedBlock } from '@core/activity/aggregate';
+import { meetingBlock } from '@core/calendar';
 import { linkedActivityIds, summarizeDay } from '@core/entries';
-import type { Matter, TimeEntry } from '@core/model';
+import type { CalendarMeeting, Matter, TimeEntry } from '@core/model';
 import { dateKeyOf } from '@core/time';
 import { useApp } from '@/state/app';
 import { usePlanner } from '@/state/planner';
@@ -11,9 +12,12 @@ export interface BlockView extends CapturedBlock {
   converted: number;
   /** The block contains the window being used right now. */
   live: boolean;
+  /** Set when the block is a meeting from the calendar, suggested next to the captured time. */
+  meeting?: CalendarMeeting;
 }
 
 const LIVE_WINDOW_MS = 20_000;
+const NO_MEETINGS: CalendarMeeting[] = [];
 
 /** All derived planner data in one memoised place, shared by the board, footer and editor. */
 export function usePlannerData() {
@@ -24,6 +28,7 @@ export function usePlannerData() {
   const date = usePlanner((s) => s.date);
   const entries = usePlanner((s) => s.entries);
   const activities = usePlanner((s) => s.activities);
+  const meetings = usePlanner((s) => (s.meetingsDate === s.date ? s.meetings : NO_MEETINGS));
 
   const dayEntries = useMemo(() => entries.filter((e) => e.date === date), [entries, date]);
   const linked = useMemo(() => linkedActivityIds(entries), [entries]);
@@ -35,7 +40,7 @@ export function usePlannerData() {
     const durations = new Map(activities.map((a) => [a.id, a.end - a.start]));
     const latest = activities.reduce((max, a) => Math.max(max, a.end), 0);
     const isToday = date === dateKeyOf(Date.now());
-    return buildCapturedBlocks(activities, { mergeGapMs, excludedApps }).map((b) => {
+    const captured = buildCapturedBlocks(activities, { mergeGapMs, excludedApps }).map((b) => {
       let linkedMs = 0;
       for (const id of b.segmentIds) if (linked.has(id)) linkedMs += durations.get(id) ?? 0;
       return {
@@ -44,7 +49,11 @@ export function usePlannerData() {
         live: isToday && b.app === currentApp && b.end === latest && Date.now() - latest < LIVE_WINDOW_MS,
       };
     });
-  }, [activities, mergeGapMs, excludedApps, linked, date, currentApp]);
+    if (!meetings.length) return captured;
+    // A meeting is used once an entry was made from it, like a captured block.
+    const suggested = meetings.map((m) => ({ ...meetingBlock(m), converted: linked.has(m.id) ? 1 : 0, live: false }));
+    return [...captured, ...suggested].sort((a, b) => a.start - b.start || b.activeMs - a.activeMs);
+  }, [activities, meetings, mergeGapMs, excludedApps, linked, date, currentApp]);
 
   const blocks = useMemo(
     () =>

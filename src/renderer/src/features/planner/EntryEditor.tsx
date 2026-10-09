@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, Copy, Link2Off, Lock, LockOpen, Trash2, X } from 'lucide-react';
-import { blockTexts, buildCapturedBlocks } from '@core/activity/aggregate';
+import { blockTexts, buildCapturedBlocks, type CapturedBlock } from '@core/activity/aggregate';
 import { appDisplayName } from '@core/activity/apps';
+import { meetingTexts } from '@core/calendar';
 import { suggestMatters } from '@core/matters';
-import { BILLING_TYPES, type BillingType, type Matter, type TimeEntry } from '@core/model';
+import { BILLING_TYPES, type BillingType, type CalendarMeeting, type Matter, type TimeEntry } from '@core/model';
 import { clamp, formatClock, MINUTES_PER_DAY, parseClock, roundDuration } from '@core/time';
 import { useApp } from '@/state/app';
 import { usePlanner } from '@/state/planner';
@@ -17,6 +18,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { KindIcon } from '@/components/shell/KindIcon';
 import { MatterPicker } from '@/features/matters/MatterPicker';
 import { MatterEditorDialog } from '@/features/matters/MatterEditorDialog';
+import { meetingPlace } from './Cards';
 import type { PlannerData } from './usePlannerData';
 
 const NARRATIVE_SAVE_DELAY = 450;
@@ -146,12 +148,25 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
   const sources = useMemo(() => {
     const ids = new Set(entry.activityIds);
     const segments = data.activities.filter((a) => ids.has(a.id));
+    const meetings = data.allBlocks.filter((b) => b.meeting && ids.has(b.meeting.id));
+    const blocks: (CapturedBlock & { meeting?: CalendarMeeting })[] = buildCapturedBlocks(segments, { mergeGapMs: Number.MAX_SAFE_INTEGER });
     // Most-used first: the main document is what the entry is about.
-    return buildCapturedBlocks(segments, { mergeGapMs: Number.MAX_SAFE_INTEGER }).sort((a, b) => b.activeMs - a.activeMs);
-  }, [entry.activityIds, data.activities]);
+    return [...blocks, ...meetings].sort((a, b) => b.activeMs - a.activeMs);
+  }, [entry.activityIds, data.activities, data.allBlocks]);
+  /** Linked meetings that are not shown today (calendar off or unreadable, meeting moved).
+   *  They are listed anyway, so the link can still be seen and removed. */
+  const unknownMeetings = useMemo(() => {
+    const known = new Set(sources.flatMap((s) => s.segmentIds));
+    return entry.activityIds.filter((id) => id.includes('@') && !known.has(id));
+  }, [entry.activityIds, sources]);
+  const unlink = (ids: readonly string[]) => {
+    const remove = new Set(ids);
+    void updateEntry(entry.id, { activityIds: latest().activityIds.filter((id) => !remove.has(id)) }, { undoable: true });
+  };
 
   const suggestions = useMemo<Matter[]>(
-    () => suggestMatters([narrative, ...sources.flatMap(blockTexts)], matters, 3).map((s) => s.matter),
+    () =>
+      suggestMatters([narrative, ...sources.flatMap((b) => (b.meeting ? meetingTexts(b.meeting) : blockTexts(b)))], matters, 3).map((s) => s.matter),
     [narrative, sources, matters],
   );
   const recent = useMemo<Matter[]>(() => {
@@ -314,7 +329,7 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
             {t('editor.sources')}
             {sources.length > 0 && <span className="field-count tabular">{duration(sources.reduce((s, b) => s + b.activeMs, 0))}</span>}
           </span>
-          {sources.length ? (
+          {sources.length || unknownMeetings.length ? (
             <div className="sources">
               {sources.map((s) => (
                 <div key={s.id} className={`source kind-${s.kind}`}>
@@ -322,9 +337,10 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
                     <KindIcon kind={s.kind} />
                   </span>
                   <span className="source-text">
-                    <span className="source-subject truncate">{s.subject}</span>
+                    <span className="source-subject truncate">{s.subject || (s.meeting && t('planner.meetingNoSubject'))}</span>
                     <span className="source-meta">
-                      {appDisplayName(s.app, language, s.appName)} · <span className="tabular">{duration(s.activeMs)}</span>
+                      {s.meeting ? meetingPlace(s.meeting, t) || t('planner.meetingFromCalendar') : appDisplayName(s.app, language, s.appName)} ·{' '}
+                      <span className="tabular">{duration(s.activeMs)}</span>
                     </span>
                   </span>
                   {!locked && (
@@ -332,12 +348,20 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
                       size="sm"
                       label={t('common.delete')}
                       icon={<Link2Off />}
-                      onClick={() => {
-                        const remove = new Set(s.segmentIds);
-                        void updateEntry(entry.id, { activityIds: latest().activityIds.filter((id) => !remove.has(id)) }, { undoable: true });
-                      }}
+                      onClick={() => unlink(s.segmentIds)}
                     />
                   )}
+                </div>
+              ))}
+              {unknownMeetings.map((id) => (
+                <div key={id} className="source kind-calendar" data-testid="unknown-meeting">
+                  <span className="source-icon">
+                    <CalendarDays />
+                  </span>
+                  <span className="source-text">
+                    <span className="source-subject truncate">{t('editor.calendarMeeting')}</span>
+                  </span>
+                  {!locked && <IconButton size="sm" label={t('common.delete')} icon={<Link2Off />} onClick={() => unlink([id])} />}
                 </div>
               ))}
             </div>

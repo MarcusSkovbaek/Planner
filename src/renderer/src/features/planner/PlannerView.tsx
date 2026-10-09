@@ -14,6 +14,8 @@ import { SummaryBar } from './SummaryBar';
 import { blankEntry, entryFromBlocks } from './entryFactory';
 import { usePlannerData } from './usePlannerData';
 
+const MEETINGS_REFRESH_MS = 5 * 60_000;
+
 export function PlannerView({ active }: { active: boolean }) {
   const data = usePlannerData();
   const editing = usePlanner((s) => s.editingId !== null && data.dayEntries.some((e) => e.id === s.editingId));
@@ -29,6 +31,24 @@ export function PlannerView({ active }: { active: boolean }) {
     if (date === lastToday.current && !editingId) void setDate(today);
     lastToday.current = today;
   }, [now]);
+
+  // Meetings: read again when the setting changes, and every few minutes while today is shown,
+  // so meetings booked during the day turn up. The backend caches and never reads twice at once.
+  const calendarOn = useApp((s) => s.settings.calendar.enabled);
+  const firstCalendarRun = useRef(true);
+  useEffect(() => {
+    if (firstCalendarRun.current) {
+      firstCalendarRun.current = false;
+      return;
+    }
+    void usePlanner.getState().loadMeetings();
+  }, [calendarOn]);
+  const showsToday = data.date === dateKeyOf(now);
+  useEffect(() => {
+    if (!active || !calendarOn || !showsToday) return;
+    const timer = setInterval(() => void usePlanner.getState().loadMeetings(), MEETINGS_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [active, calendarOn, showsToday]);
 
   useHotkeys(
     {
@@ -46,7 +66,7 @@ export function PlannerView({ active }: { active: boolean }) {
         const blocks = data.blocks.filter((b) => selectedBlockIds.includes(b.id));
         const { settings, matters } = useApp.getState();
         if (!blocks.length) return false;
-        void createEntries([entryFromBlocks(blocks, { date, settings, matters })], { edit: true });
+        void createEntries([entryFromBlocks(blocks, { date, settings, matters, segments: data.activities })], { edit: true });
       },
       'mod+enter': () => {
         const { selectedEntryIds, setStatus } = usePlanner.getState();

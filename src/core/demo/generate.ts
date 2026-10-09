@@ -36,6 +36,8 @@ export interface PlannedWork {
 export interface GeneratedDay {
   segments: ActivitySegment[];
   work: PlannedWork[];
+  /** The Teams meeting of the day as booked in the calendar (the captured part may be shorter). */
+  meeting: { subject: string; start: number; end: number };
 }
 
 const MIN = 60_000;
@@ -130,7 +132,13 @@ export function generateDemoDay(date: DateKey, untilMs = Number.POSITIVE_INFINIT
     t = Math.max(t, sessionEnd) + Math.round(between(0, 3)) * MIN;
   }
 
-  return { segments: segments.filter((s) => s.end > s.start), work };
+  // Booked in whole half hours; the call itself may end a little early.
+  const booked = Math.ceil((meetingEnd - meetingStart) / (30 * MIN)) * 30 * MIN;
+  return {
+    segments: segments.filter((s) => s.end > s.start),
+    work,
+    meeting: { subject: meeting.subject, start: meetingStart, end: meetingStart + booked },
+  };
 }
 
 const SEEDED_KEY = 'demo-seeded';

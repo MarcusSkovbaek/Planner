@@ -3,6 +3,7 @@ import type {
   BootstrapData,
   DateKey,
   DayData,
+  DayMeetings,
   DeepPartial,
   EntryStatus,
   Matter,
@@ -42,6 +43,8 @@ export interface PlannerApi {
   deleteEntries(ids: string[]): Promise<void>;
   setEntryStatus(ids: string[], status: EntryStatus): Promise<TimeEntry[]>;
   deleteActivities(date: DateKey, ids: string[]): Promise<void>;
+  /** Meetings from the local calendar on `date`. Slow (seconds), so it is separate from `getDay`. */
+  getMeetings(date: DateKey): Promise<DayMeetings>;
 
   listMatters(): Promise<Matter[]>;
   saveMatter(input: MatterInput): Promise<Matter>;
@@ -73,6 +76,7 @@ export const API_METHODS = [
   'deleteEntries',
   'setEntryStatus',
   'deleteActivities',
+  'getMeetings',
   'listMatters',
   'saveMatter',
   'deleteMatter',

@@ -1,4 +1,5 @@
 import { ApiErrorCode, type PlannerApi, type PlannerEvent, type PlannerListener } from '../api';
+import { CalendarCache, type CalendarSource } from '../calendar';
 import { formatHours, translate } from '../i18n';
 import { createId } from '../ids';
 import { colorForIndex, matterCode } from '../matters';
@@ -10,6 +11,7 @@ import {
   type BootstrapData,
   type DateKey,
   type DayData,
+  type DayMeetings,
   type DeepPartial,
   type EntryStatus,
   type Matter,
@@ -54,6 +56,8 @@ export interface PlannerServiceDeps {
   platform: PlatformAdapter;
   /** Omit to run without automatic capture (e.g. in tests). */
   createTracker?: (options: TrackerOptions, emit: (event: TrackerEvent) => void) => ActivityTracker;
+  /** Omit where there is no calendar to read. It is only read when the planner asks for a day. */
+  calendar?: CalendarSource;
   clock?: () => number;
 }
 
@@ -113,10 +117,12 @@ export class PlannerService implements PlannerApi {
   /** Serialises mutations so concurrent calls never interleave writes. */
   private queue: Promise<unknown> = Promise.resolve();
   private readonly clock: () => number;
+  private readonly calendar: CalendarCache | null;
   private initialized = false;
 
   constructor(private readonly deps: PlannerServiceDeps) {
     this.clock = deps.clock ?? Date.now;
+    this.calendar = deps.calendar ? new CalendarCache(deps.calendar, this.clock) : null;
   }
 
   async init(): Promise<void> {
@@ -295,6 +301,17 @@ export class PlannerService implements PlannerApi {
     });
   }
 
+  /** Never fails: when the calendar cannot be read the planner simply shows no meetings. */
+  async getMeetings(date: DateKey): Promise<DayMeetings> {
+    if (!isDateKey(date)) fail(ApiErrorCode.InvalidInput, 'date');
+    if (!this.calendar || !this.settings.calendar.enabled) return { date, state: 'off', meetings: [] };
+    try {
+      return { date, state: 'ok', meetings: await this.calendar.get(date) };
+    } catch {
+      return { date, state: 'unavailable', meetings: [] };
+    }
+  }
+
   // ── Matters ───────────────────────────────────────────────────────────────
 
   async listMatters(): Promise<Matter[]> {
@@ -369,7 +386,10 @@ export class PlannerService implements PlannerApi {
 
   updateSettings(patch: DeepPartial<Settings>): Promise<Settings> {
     return this.enqueue(async () => {
+      const calendarWasOn = this.settings.calendar.enabled;
       this.settings = normalizeSettings(deepMerge(this.settings, patch));
+      // Read afresh when the calendar is turned back on, e.g. after Outlook was set up.
+      if (!calendarWasOn && this.settings.calendar.enabled) this.calendar?.clear();
       await this.deps.storage.write(KEYS.settings, this.settings);
       this.tracker?.updateOptions(trackerOptionsFrom(this.settings));
       this.deps.platform.applySettings?.(this.settings);

@@ -71,6 +71,23 @@ test.describe('planner', () => {
     await expect(entries).toHaveCount(countBefore);
   });
 
+  test('suggests meetings from the calendar and turns one into an entry', async ({ page }) => {
+    await openApp(page);
+    await gotoDayWithData(page);
+    const meetings = page.getByTestId('meeting-card');
+    await expect(meetings.filter({ hasText: 'Teams-møde' })).toHaveCount(1);
+    const meeting = meetings.filter({ hasText: 'Afdelingsmøde' });
+    await expect(meeting).toHaveAttribute('aria-label', /^Møde fra Outlook-kalenderen, Afdelingsmøde – ugens sager, 08:30–09:00/);
+    await expect(meeting).not.toHaveClass(/converted/);
+
+    await meeting.dblclick();
+    await expect(page.getByTestId('entry-editor')).toHaveClass(/open/);
+    await expect(page.getByTestId('start-input')).toHaveValue('08:30');
+    await expect(page.getByTestId('end-input')).toHaveValue('09:00');
+    await expect(page.getByTestId('narrative')).toHaveValue('Afdelingsmøde – ugens sager');
+    await expect(meeting).toHaveClass(/converted/);
+  });
+
   test('creates an entry by click-dragging, assigns a matter and releases it', async ({ page }) => {
     await openApp(page);
     await gotoDayWithData(page);
