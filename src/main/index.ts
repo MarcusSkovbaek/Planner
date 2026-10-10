@@ -2,8 +2,10 @@ import { app, BrowserWindow, nativeTheme, powerMonitor } from 'electron';
 import { join } from 'node:path';
 import { PlannerService } from '@core/backend/PlannerService';
 import { seedDemoData } from '@core/demo/generate';
+import { SimulatedCalendar } from '@core/demo/SimulatedCalendar';
 import type { Settings } from '@core/model';
 import { ActivityTracker } from '@core/tracking/ActivityTracker';
+import { OutlookCalendarSource } from './calendar/OutlookCalendar';
 import { registerIpc } from './ipc';
 import { createElectronPlatform } from './platform';
 import { lockDownNetwork, useLocalProfile } from './security';
@@ -104,6 +106,8 @@ async function start(): Promise<void> {
       },
     }),
     createTracker: (options, emit) => new ActivityTracker(provider, idle, options, emit),
+    // Read only when the planner shows a day, never at start-up.
+    calendar: demo ? new SimulatedCalendar() : process.platform === 'win32' ? new OutlookCalendarSource() : undefined,
   });
   await service.init();
   if (demo) await seedDemoData(service, storage);

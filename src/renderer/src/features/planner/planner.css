@@ -703,6 +703,23 @@
     0 0 0 1.5px var(--accent),
     var(--shadow-md);
 }
+/* Meetings from the calendar are suggestions: a lighter surface with a dashed edge. */
+.captured-card.meeting-card {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--kind-accent) 42%, var(--kind-border));
+  background: color-mix(in srgb, var(--kind-bg) 62%, var(--surface));
+}
+.captured-card.meeting-card.selected {
+  border-style: solid;
+  border-color: var(--accent);
+}
+.captured-card.meeting-card.tentative::before {
+  background: repeating-linear-gradient(180deg, var(--kind-accent) 0 4px, transparent 4px 7px);
+}
+.meeting-card .cc-untitled {
+  font-style: italic;
+  font-weight: 500;
+}
 .captured-card.converted {
   opacity: 0.55;
   background: repeating-linear-gradient(-45deg, var(--kind-bg), var(--kind-bg) 6px, color-mix(in srgb, var(--kind-bg) 70%, var(--surface)) 6px, color-mix(in srgb, var(--kind-bg) 70%, var(--surface)) 12px);

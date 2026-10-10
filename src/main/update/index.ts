@@ -31,6 +31,9 @@ export function createUpdater(): SecureUpdater {
       // electron-builder NSIS flags: silent per-user upgrade, optionally relaunching the app.
       const args = ['--updated', '/S', ...(restart ? ['--force-run'] : [])];
       const child = spawn(path, args, { detached: true, stdio: 'ignore', windowsHide: true });
+      // Start-up errors (file gone, blocked by antivirus) arrive later as an event; without
+      // a listener they would crash the main process. The update is retried after the next start.
+      child.on('error', (err) => console.warn('[updater] installer did not start:', err.message));
       child.unref();
     },
   });

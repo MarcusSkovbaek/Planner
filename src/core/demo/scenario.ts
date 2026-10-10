@@ -99,10 +99,10 @@ export const DEMO_TASKS: DemoTask[] = [
   },
 ];
 
-export const DEMO_MEETINGS: { matter: number; window: DemoWindow; narrative: string }[] = [
-  { matter: 0, window: w('ms-teams', 'Teams', 'Møde: Statusmøde Vindpark Øst | Microsoft Teams'), narrative: 'Statusmøde med klient om Vindpark Øst' },
-  { matter: 2, window: w('ms-teams', 'Teams', 'Møde: Forligsmøde Havnegade 12 | Microsoft Teams'), narrative: 'Forligsmøde med modpartens advokat' },
-  { matter: 6, window: w('ms-teams', 'Teams', 'Meeting: Faglig fredag – GDPR-opdatering | Microsoft Teams'), narrative: 'Faglig opdatering om GDPR' },
+export const DEMO_MEETINGS: { matter: number; subject: string; window: DemoWindow; narrative: string }[] = [
+  { matter: 0, subject: 'Statusmøde Vindpark Øst', window: w('ms-teams', 'Teams', 'Møde: Statusmøde Vindpark Øst | Microsoft Teams'), narrative: 'Statusmøde med klient om Vindpark Øst' },
+  { matter: 2, subject: 'Forligsmøde Havnegade 12', window: w('ms-teams', 'Teams', 'Møde: Forligsmøde Havnegade 12 | Microsoft Teams'), narrative: 'Forligsmøde med modpartens advokat' },
+  { matter: 6, subject: 'Faglig fredag – GDPR-opdatering', window: w('ms-teams', 'Teams', 'Meeting: Faglig fredag – GDPR-opdatering | Microsoft Teams'), narrative: 'Faglig opdatering om GDPR' },
 ];
 
 /** Windows visited between tasks that rarely belong to a matter. */

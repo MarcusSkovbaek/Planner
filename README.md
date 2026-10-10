@@ -61,34 +61,68 @@ Sådan sikres det, at **kun du** kan udgive opdateringer:
 
 ### Engangsopsætning (på din egen PC)
 
-Den private nøgle skal laves og opbevares af dig og må aldrig ligge i repositoryet.
+Du skal kun gøre dette én gang. Den private nøgle laves og bliver på din egen PC. Den må aldrig ligge på GitHub.
 
-```bash
-npm install
-npm run update:keygen        # laver nøglepar; den offentlige nøgle skrives i trustedKeys.ts
-git add src/main/update/trustedKeys.ts && git commit -m "Add update signing key" && git push
-```
+**1. Lav nøglen**
 
-Læg den private nøgle som hemmelighed i et beskyttet GitHub-miljø, så udgivelser kun kan signeres med din godkendelse:
+1. Installér Node.js (versionen mærket _LTS_) fra [nodejs.org](https://nodejs.org). Vælg standardindstillingerne.
+2. Åbn repositoryet på GitHub. Klik på den grønne knap **Code → Download ZIP**.
+3. Højreklik på ZIP-filen, og vælg **Udpak alle**.
+4. Åbn den udpakkede mappe (den, der indeholder mappen `scripts`). Klik i adresselinjen øverst i Stifinder, skriv `cmd`, og tryk Enter. Der åbnes et sort vindue i mappen.
+5. Skriv denne kommando, og tryk Enter:
 
-1. GitHub → **Settings → Environments → New environment** → `release`. Tilføj dig selv under **Required reviewers**. Vælg under **Deployment branches and tags** _Selected branches and tags_, og tilføj reglen `v*.*.*` af typen _Tag_, så kun versions-tags kan bruge miljøet.
-2. Tilføj hemmeligheden `PLANNER_UPDATE_SIGNING_KEY` i miljøet med indholdet af den `.pem`-fil, som `update:keygen` har lavet (eller kør `gh secret set PLANNER_UPDATE_SIGNING_KEY --env release < sti/til/nøgle.pem`).
-3. Gem en kopi af nøglen offline, for eksempel i en password manager.
+   ```
+   node scripts/update-keygen.mjs
+   ```
 
-Vil du have maksimal kontrol, kan du i stedet signere lokalt: byg installationen, kør `npm run update:sign -- --installer <fil.exe> --base-url <https://…> --key <nøgle.pem>`, og upload `update.json` selv.
+   Der skal ikke installeres andet først.
+6. Kommandoen gemmer den private nøgle i `C:\Users\<dit navn>\.planner-signing\planner-update-signing-key.pem` og viser en linje, der begynder med `{ id: '`. Den linje er den offentlige nøgle. Den er ikke hemmelig.
+
+**2. Læg den offentlige nøgle på GitHub**
+
+1. Åbn `src/main/update/trustedKeys.ts` på GitHub, og klik på blyanten (**Edit this file**).
+2. Indsæt hele linjen fra kommandoen mellem `// <trusted-keys>` og `// </trusted-keys>`.
+3. Klik **Commit changes**.
+
+Du kan også bare sende linjen til Claude og bede om at få den lagt ind.
+
+**3. Lav et beskyttet miljø til nøglen**
+
+1. På GitHub: **Settings → Environments → New environment**. Kald det `release`.
+2. Sæt hak i **Required reviewers**, og tilføj dig selv. Så kan intet signeres uden din godkendelse.
+3. Under **Deployment branches and tags**: vælg _Selected branches and tags_ → **Add deployment branch or tag rule** → vælg _Tag_ → skriv `v*.*.*`.
+4. Klik **Add environment secret**. Navn: `PLANNER_UPDATE_SIGNING_KEY`. Værdi: hele indholdet af `.pem`-filen. Åbn den i Notesblok (kommandoen viser den præcise sti), tryk Ctrl+A og Ctrl+C, og indsæt i feltet.
+5. Gem en kopi af `.pem`-filen et sikkert sted, for eksempel i en password manager. Mister du den, kan de installerede kopier ikke længere opdateres automatisk.
+
+Du kan slette den udpakkede mappe og ZIP-filen bagefter. Den private nøgle ligger ikke i dem.
+
+**4. Installér den første signerede version manuelt**
+
+Versioner, der er bygget før nøglen kom ind i `trustedKeys.ts`, kan ikke opdatere sig selv. Udgiv derfor en version som beskrevet nedenfor, og installér den én gang på hver PC med installationsfilen fra GitHub Releases. Derefter kommer opdateringer automatisk.
+
+_For udviklere:_ Du kan også signere lokalt: byg installationen, kør `npm run update:sign -- --installer <fil.exe> --base-url <https://…> --key <nøgle.pem>`, og upload `update.json` selv.
 
 ### Udgiv en ny version
 
-```bash
-npm version patch            # eller minor/major – opretter tag v1.0.1
-git push --follow-tags
-```
+Alt foregår i browseren:
+
+1. Gå til repositoryet på GitHub → **Releases → Draft a new release**.
+2. Klik **Choose a tag**, skriv et nyt versionsnummer, for eksempel `v1.1.0`, og vælg **Create new tag**. Nummeret skal have formen `v` + tre tal og være højere end den sidste version. Lad _Target_ stå på `Main`.
+3. Skriv eventuelt en titel og en beskrivelse (eller klik **Generate release notes**). Lad _Set as the latest release_ være slået til, og sæt ikke hak i _pre-release_.
+4. Klik **Publish release**.
+5. Gå til **Actions**. Når workflowet **Release** venter på dig (efter ca. 15-30 minutter), klik **Review deployments**, sæt hak ved `release`, og klik **Approve and deploy**.
+
+Indtil kørslen er godkendt og færdig, kan Planner melde, at opdateringstjekket fejlede. Det er forventet og retter sig selv ved næste tjek.
+
+Installationsfilen og `update.json` bliver derefter lagt på udgivelsen. Versionsnummeret kommer fra tagget, så `package.json` skal ikke ændres.
 
 Workflowet **Release** kører i tre trin:
 
-1. **Kontrol**: Tagget skal passe med versionen i `package.json`, og appen skal have en betroet nøgle.
-2. **Byg**: Installationen bygges og testes på Windows præcis som i CI, inklusive røgtesten. Jobbet har ikke adgang til nøglen.
-3. **Signér og udgiv**: Når du har godkendt kørslen under _Actions_, signeres manifestet, og installationen udgives på GitHub Releases. Nøglen bruges kun i dette job. Det installerer ingen npm-pakker, og ud over GitHubs egne standardhandlinger kører det kun projektets eget signeringsscript, så en kompromitteret npm-pakke ikke kan få fat i nøglen.
+1. **Kontrol**: Tagget skal have formen `v1.2.3`, og appen skal have en betroet nøgle.
+2. **Byg**: Installationen bygges og testes på Windows præcis som i CI, inklusive røgtesten, med versionen fra tagget. Jobbet har ikke adgang til nøglen.
+3. **Signér og udgiv**: Når du har godkendt kørslen under _Actions_, signeres manifestet, og filerne lægges på GitHub-udgivelsen. Nøglen bruges kun i dette job. Det installerer ingen npm-pakker, og ud over GitHubs egne standardhandlinger kører det kun projektets eget signeringsscript, så en kompromitteret npm-pakke ikke kan få fat i nøglen.
+
+Fejler et trin, kan du åbne kørslen under _Actions_ og klikke **Re-run failed jobs**. Udviklere kan i stedet pushe et tag (`git tag v1.1.0 && git push origin v1.1.0`); så opretter workflowet selv udgivelsen.
 
 Installerede kopier finder opdateringen inden for få timer. Brugeren kan også vælge _Søg efter opdateringer_ under Indstillinger.
 

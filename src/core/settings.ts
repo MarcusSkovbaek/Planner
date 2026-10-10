@@ -30,6 +30,9 @@ export const DEFAULT_SETTINGS: Settings = {
     showConverted: true,
     hiddenKinds: [],
   },
+  calendar: {
+    enabled: true,
+  },
 };
 
 export const INCREMENT_OPTIONS = [1, 5, 6, 10, 15, 30] as const;
@@ -103,6 +106,9 @@ export function normalizeSettings(raw: unknown): Settings {
       hiddenKinds: Array.isArray(s.planner.hiddenKinds)
         ? s.planner.hiddenKinds.filter((k) => ACTIVITY_KINDS.includes(k))
         : [],
+    },
+    calendar: {
+      enabled: Boolean(s.calendar.enabled),
     },
   };
 }

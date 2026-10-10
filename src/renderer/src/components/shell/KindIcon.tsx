@@ -1,6 +1,6 @@
 import {
   AppWindow,
-  Calendar,
+  CalendarDays,
   Code2,
   FileSpreadsheet,
   FileText,
@@ -21,7 +21,7 @@ const ICONS: Record<ActivityKind, (props: LucideProps) => React.ReactNode> = {
   presentation: Presentation,
   pdf: FileType2,
   email: Mail,
-  calendar: Calendar,
+  calendar: CalendarDays,
   meeting: Video,
   chat: MessageSquare,
   browser: Globe,

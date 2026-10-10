@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Briefcase, CalendarPlus, Copy, EyeOff, Layers, Lock, LockOpen, MousePointerClick, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Briefcase, CalendarDays, CalendarPlus, Copy, EyeOff, Layers, Lock, LockOpen, MousePointerClick, Pencil, Plus, Trash2 } from 'lucide-react';
 import { blockMinutes } from '@core/activity/aggregate';
 import { appDisplayName } from '@core/activity/apps';
 import { layoutColumns } from '@core/layout';
@@ -18,7 +18,7 @@ import { computePosition } from '@/lib/position';
 import { EmptyState } from '@/components/ui/controls';
 import { Button } from '@/components/ui/Button';
 import { KindIcon } from '@/components/shell/KindIcon';
-import { CapturedCard, EntryCard, type EntryGesture } from './Cards';
+import { CapturedCard, EntryCard, MeetingCard, meetingPlace, type EntryGesture } from './Cards';
 import { CapturedFilter } from './CapturedFilter';
 import { blankEntry, blockDurationMin, entryFromBlocks } from './entryFactory';
 import { startGesture } from './gesture';
@@ -224,7 +224,7 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
       const grabRatio = clamp((event.clientY - rect.top) / Math.max(1, rect.height), 0, 1);
       const selectedIds = usePlanner.getState().selectedBlockIds;
       const group = selectedIds.includes(block.id) ? data.blocks.filter((b) => selectedIds.includes(b.id)) : [block];
-      const durationMin = blockDurationMin(group, settings);
+      const durationMin = blockDurationMin(group, settings, data.activities);
       if (hoverTimer.current) clearTimeout(hoverTimer.current);
       setHover(null);
 
@@ -250,7 +250,7 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
             return;
           }
           if (current?.over) {
-            void createEntries([entryFromBlocks(current.blocks, { date, settings, matters, startMin: current.startMin })], { edit: true });
+            void createEntries([entryFromBlocks(current.blocks, { date, settings, matters, startMin: current.startMin, segments: data.activities })], { edit: true });
           }
         },
         onCancel: () => {
@@ -259,7 +259,7 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
         },
       });
     },
-    [data.blocks, settings, matters, date, inc, minuteAt, selectBlocks, createEntries],
+    [data.blocks, data.activities, settings, matters, date, inc, minuteAt, selectBlocks, createEntries],
   );
 
   const onBlockDoubleClick = useCallback(
@@ -275,11 +275,13 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
       const group = state.selectedBlockIds.includes(block.id) ? data.blocks.filter((b) => state.selectedBlockIds.includes(b.id)) : [block];
       if (!state.selectedBlockIds.includes(block.id)) selectBlocks([block.id]);
       const appName = appDisplayName(block.app, language, block.appName);
+      // Meetings come from the calendar: they cannot be deleted or excluded, only turned into entries.
+      const captured = group.filter((b) => !b.meeting);
       openContextMenu(event, [
         {
           label: group.length > 1 ? t('planner.combine') : t('planner.createEntry'),
           icon: <CalendarPlus />,
-          onSelect: () => void createEntries([entryFromBlocks(group, { date, settings, matters })], { edit: true }),
+          onSelect: () => void createEntries([entryFromBlocks(group, { date, settings, matters, segments: data.activities })], { edit: true }),
         },
         ...(group.length > 1
           ? [
@@ -290,31 +292,35 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
               },
             ]
           : []),
-        {
-          label: t('planner.selectSameApp', { app: appName }),
-          icon: <MousePointerClick />,
-          onSelect: () => selectBlocks(data.blocks.filter((b) => b.app === block.app).map((b) => b.id)),
-        },
-        { type: 'separator' },
-        {
-          label: t('planner.excludeApp', { app: appName }),
-          icon: <EyeOff />,
-          onSelect: () => {
-            const excluded = [...new Set([...settings.tracking.excludedApps, block.app])];
-            void updateSettings({ tracking: { excludedApps: excluded } }).then(() =>
-              toast({ message: t('toast.appExcluded', { app: appName }) }),
-            );
-          },
-        },
-        {
-          label: t('planner.deleteCaptured'),
-          icon: <Trash2 />,
-          danger: true,
-          onSelect: () => void deleteActivities(group.flatMap((b) => b.segmentIds)),
-        },
+        ...(block.meeting
+          ? []
+          : [
+              {
+                label: t('planner.selectSameApp', { app: appName }),
+                icon: <MousePointerClick />,
+                onSelect: () => selectBlocks(data.blocks.filter((b) => b.app === block.app && !b.meeting).map((b) => b.id)),
+              },
+              { type: 'separator' as const },
+              {
+                label: t('planner.excludeApp', { app: appName }),
+                icon: <EyeOff />,
+                onSelect: () => {
+                  const excluded = [...new Set([...settings.tracking.excludedApps, block.app])];
+                  void updateSettings({ tracking: { excludedApps: excluded } }).then(() =>
+                    toast({ message: t('toast.appExcluded', { app: appName }) }),
+                  );
+                },
+              },
+              {
+                label: t('planner.deleteCaptured'),
+                icon: <Trash2 />,
+                danger: true,
+                onSelect: () => void deleteActivities(captured.flatMap((b) => b.segmentIds)),
+              },
+            ]),
       ]);
     },
-    [data.blocks, language, t, selectBlocks, createEntries, date, settings, matters, updateSettings, deleteActivities],
+    [data.blocks, data.activities, language, t, selectBlocks, createEntries, date, settings, matters, updateSettings, deleteActivities],
   );
 
   const onEntryActivate = useCallback((entry: TimeEntry, toggle: boolean) => selectEntry(entry.id, toggle ? 'toggle' : 'replace'), [selectEntry]);
@@ -328,6 +334,17 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
     }
     hoverTimer.current = setTimeout(() => setHover({ block, rect: element.getBoundingClientRect() }), 550);
   }, []);
+
+  // A card that disappears under the pointer (day switch, view switch, deleted or hidden block)
+  // never reports that the pointer left it, so drop its hover card here.
+  useEffect(() => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    setHover(null);
+  }, [date, active]);
+  useEffect(() => () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+  }, []);
+  const hovered = hover && data.blocks.some((b) => b.id === hover.block.id) ? hover : null;
 
   const dayStart = settings.timesheet.dayStartHour * 60;
   const dayEnd = settings.timesheet.dayEndHour * 60;
@@ -416,20 +433,23 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
 
           <div className="column captured-column" data-testid="captured-column" onPointerDown={(e) => e.button === 0 && clearSelection()}>
             {offHours}
-            {blockLayout.map((l) => (
-              <CapturedCard
-                key={l.item.id}
-                block={l.item}
-                layout={l}
-                pxPerMin={pxPerMin}
-                selected={selectedBlockSet.has(l.item.id)}
-                onPointerDown={onBlockPointerDown}
-                onDoubleClick={onBlockDoubleClick}
-                onContextMenu={onBlockContextMenu}
-                onHover={onBlockHover}
-                onActivate={onBlockActivate}
-              />
-            ))}
+            {blockLayout.map((l) => {
+              const Card = l.item.meeting ? MeetingCard : CapturedCard;
+              return (
+                <Card
+                  key={l.item.id}
+                  block={l.item}
+                  layout={l}
+                  pxPerMin={pxPerMin}
+                  selected={selectedBlockSet.has(l.item.id)}
+                  onPointerDown={onBlockPointerDown}
+                  onDoubleClick={onBlockDoubleClick}
+                  onContextMenu={onBlockContextMenu}
+                  onHover={onBlockHover}
+                  onActivate={onBlockActivate}
+                />
+              );
+            })}
           </div>
 
           {isToday && (
@@ -476,13 +496,15 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
         createPortal(
           <div className={cx('drag-ghost', `kind-${drag.blocks[0]!.kind}`, drag.over && 'over')} style={{ left: drag.x + 14, top: drag.y + 12 }}>
             <KindIcon kind={drag.blocks[0]!.kind} />
-            <span className="truncate">{drag.blocks.length > 1 ? t('planner.selected', { n: drag.blocks.length }) : drag.blocks[0]!.subject}</span>
+            <span className="truncate">
+              {drag.blocks.length > 1 ? t('planner.selected', { n: drag.blocks.length }) : drag.blocks[0]!.subject || t('planner.meetingNoSubject')}
+            </span>
             <span className="drag-ghost-hours tabular">{hours(drag.durationMin)}</span>
           </div>,
           document.body,
         )}
 
-      {hover && !drag && <BlockHoverCard block={hover.block} rect={hover.rect} />}
+      {hovered && !drag && <BlockHoverCard block={hovered.block} rect={hovered.rect} />}
     </div>
   );
 }
@@ -495,6 +517,8 @@ function BlockHoverCard({ block, rect }: { block: BlockView; rect: DOMRect }) {
     if (ref.current) setPos(computePosition(rect, ref.current.getBoundingClientRect(), 'left-start', 10));
   }, [rect]);
   const appName = appDisplayName(block.app, language, block.appName);
+  const { meeting } = block;
+  if (meeting) return <MeetingHoverCard block={block} meeting={meeting} rect={rect} />;
   return createPortal(
     <div ref={ref} className={cx('hover-card', `kind-${block.kind}`)} style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}>
       <div className="hc-head">
@@ -532,6 +556,55 @@ function BlockHoverCard({ block, rect }: { block: BlockView; rect: DOMRect }) {
               {title}
             </div>
           ))}
+        </div>
+      )}
+    </div>,
+    document.body,
+  );
+}
+
+function MeetingHoverCard({ block, meeting, rect }: { block: BlockView; meeting: NonNullable<BlockView['meeting']>; rect: DOMRect }) {
+  const { t, duration } = useI18n();
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    if (ref.current) setPos(computePosition(rect, ref.current.getBoundingClientRect(), 'left-start', 10));
+  }, [rect]);
+  const place = meetingPlace(meeting, t);
+  return createPortal(
+    <div ref={ref} className="hover-card kind-calendar" style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}>
+      <div className="hc-head">
+        <span className="hc-icon">
+          <CalendarDays />
+        </span>
+        <div className="hc-title">
+          <div className="hc-subject">{meeting.subject || t('planner.meetingNoSubject')}</div>
+          <div className="hc-sub">
+            {t('planner.meetingFromCalendar')}
+            {meeting.tentative && <> · {t('planner.tentative')}</>}
+          </div>
+        </div>
+      </div>
+      <div className="hc-stats">
+        <div>
+          <span className="hc-label">{t('list.colTime')}</span>
+          <span className="tabular">
+            {timeOfDay(meeting.start)} – {timeOfDay(meeting.end)}
+          </span>
+        </div>
+        <div>
+          <span className="hc-label">{t('editor.duration')}</span>
+          <span className="tabular">{duration(block.activeMs)}</span>
+        </div>
+        <div>
+          <span className="hc-label">{t('summary.converted')}</span>
+          <span className="tabular">{Math.round(block.converted * 100)}%</span>
+        </div>
+      </div>
+      {place && (
+        <div className="hc-titles">
+          <div className="hc-label">{t('planner.location')}</div>
+          <div className="hc-window truncate">{place}</div>
         </div>
       )}
     </div>,

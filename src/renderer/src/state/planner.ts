@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { PlannerEvent } from '@core/api';
 import { apiErrorCode, ApiErrorCode } from '@core/api';
-import type { ActivitySegment, DateKey, EntryStatus, TimeEntry, TimeEntryInput } from '@core/model';
+import type { ActivitySegment, CalendarMeeting, DateKey, EntryStatus, TimeEntry, TimeEntryInput } from '@core/model';
 import { addDays, dateKeyOf, startOfWeek } from '@core/time';
 import { sortEntries } from '@core/entries';
 import { api } from '@/api/client';
@@ -28,6 +28,9 @@ interface PlannerState {
   /** Captured activity of `date`. */
   activities: ActivitySegment[];
   activitiesDate: DateKey | null;
+  /** Meetings from the calendar on `meetingsDate`; they arrive after the day itself. */
+  meetings: CalendarMeeting[];
+  meetingsDate: DateKey | null;
   loading: boolean;
   selectedEntryIds: string[];
   selectedBlockIds: string[];
@@ -35,6 +38,8 @@ interface PlannerState {
   undoStack: UndoItem[];
 
   load(date?: DateKey): Promise<void>;
+  /** Reads the calendar in the background; never shows an error beyond one quiet notice. */
+  loadMeetings(date?: DateKey): Promise<void>;
   setDate(date: DateKey): Promise<void>;
   /** Navigates to `date` and opens the entry in the editor. */
   focusEntry(date: DateKey, id: string): Promise<void>;
@@ -54,6 +59,9 @@ interface PlannerState {
 }
 
 let loadSeq = 0;
+let meetingsSeq = 0;
+/** The "calendar could not be read" notice is shown once per session, not on every day switch. */
+let calendarNoticeShown = false;
 
 function reportError(err: unknown) {
   const t = currentT();
@@ -101,6 +109,8 @@ export const usePlanner = create<PlannerState>((set, get) => {
     entries: [],
     activities: [],
     activitiesDate: null,
+    meetings: [],
+    meetingsDate: null,
     loading: false,
     selectedEntryIds: [],
     selectedBlockIds: [],
@@ -111,6 +121,8 @@ export const usePlanner = create<PlannerState>((set, get) => {
       const seq = ++loadSeq;
       const weekStart = startOfWeek(date);
       set({ loading: true });
+      // Not awaited: reading the calendar can take seconds and must never hold up the day.
+      void get().loadMeetings(date);
       try {
         const [day, week] = await Promise.all([
           api().getDay(date),
@@ -121,6 +133,22 @@ export const usePlanner = create<PlannerState>((set, get) => {
       } catch (err) {
         if (seq === loadSeq) set({ loading: false });
         reportError(err);
+      }
+    },
+
+    async loadMeetings(date = get().date) {
+      const seq = ++meetingsSeq;
+      try {
+        const result = await api().getMeetings(date);
+        if (seq !== meetingsSeq || date !== get().date) return;
+        set({ meetings: result.meetings, meetingsDate: date });
+        if (result.state === 'unavailable' && !calendarNoticeShown) {
+          calendarNoticeShown = true;
+          toast({ tone: 'info', message: currentT()('planner.calendarUnavailable'), duration: 8000 });
+        }
+      } catch (err) {
+        // The planner works without meetings; keep what is shown.
+        console.error(err);
       }
     },
 
@@ -136,6 +164,8 @@ export const usePlanner = create<PlannerState>((set, get) => {
         ...(weekStart !== get().weekStart ? { entries: [], weekStart } : {}),
         activities: [],
         activitiesDate: null,
+        meetings: [],
+        meetingsDate: null,
       });
       return get().load(date);
     },

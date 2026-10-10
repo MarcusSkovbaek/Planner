@@ -3,6 +3,7 @@ import { PlannerService, type PlatformAdapter, type UpdateController } from '@co
 import type { UpdateState, UpdateStatus } from '@core/model';
 import type { KeyValueStorage } from '@core/backend/storage';
 import { seedDemoData } from '@core/demo/generate';
+import { SimulatedCalendar } from '@core/demo/SimulatedCalendar';
 import { SimulatedProvider } from '@core/demo/SimulatedProvider';
 import { ActivityTracker } from '@core/tracking/ActivityTracker';
 
@@ -109,6 +110,7 @@ export async function createWebBackend(): Promise<PlannerApi> {
     createTracker: liveTracking
       ? (options, emit) => new ActivityTracker(new SimulatedProvider(), { getIdleSeconds: () => 0 }, options, emit)
       : undefined,
+    calendar: new SimulatedCalendar(),
   });
   await service.init();
   if (!params.has('empty')) await seedDemoData(service, storage);

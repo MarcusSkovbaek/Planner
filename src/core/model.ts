@@ -161,6 +161,10 @@ export interface Settings {
     showConverted: boolean;
     hiddenKinds: ActivityKind[];
   };
+  calendar: {
+    /** Show meetings from the local Outlook calendar as suggestions in the planner. */
+    enabled: boolean;
+  };
 }
 
 export type DeepPartial<T> = { [K in keyof T]?: T[K] extends readonly unknown[] ? T[K] : T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -178,6 +182,31 @@ export interface DayData {
   date: DateKey;
   activities: ActivitySegment[];
   entries: TimeEntry[];
+}
+
+/** One meeting from the user's calendar, clipped to the day it is shown on. */
+export interface CalendarMeeting {
+  /** Unique per occurrence (recurring meetings share their calendar id). */
+  id: string;
+  subject: string;
+  location: string;
+  /** Epoch milliseconds. */
+  start: number;
+  /** Epoch milliseconds. */
+  end: number;
+  /** Accepted tentatively, or shown as tentative in the calendar. */
+  tentative: boolean;
+  /** A Microsoft Teams meeting. */
+  teams: boolean;
+}
+
+/** `off`: turned off in settings or not supported here; `unavailable`: the calendar could not be read. */
+export type CalendarState = 'ok' | 'off' | 'unavailable';
+
+export interface DayMeetings {
+  date: DateKey;
+  state: CalendarState;
+  meetings: CalendarMeeting[];
 }
 
 export type UpdateState =

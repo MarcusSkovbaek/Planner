@@ -134,6 +134,33 @@ describe('SecureUpdater', () => {
     expect((await updater.check()).state).toBe('ready');
   });
 
+  it('does not keep claiming a replaced download is ready when the newer download fails', async () => {
+    const { updater, files, trusted, launchInstaller } = setup();
+    expect((await updater.check()).state).toBe('ready');
+    // The feed now offers 1.2.0, but its installer cannot be downloaded.
+    const sha512 = createHash('sha512').update(INSTALLER).digest('base64');
+    const newer = { version: '1.2.0', file: 'Planner-Setup-1.2.0.exe', url: 'https://example.test/Planner-Setup-1.2.0.exe', size: INSTALLER.length, sha512 };
+    files.set(FEED, JSON.stringify(signManifest(newer, trusted.privateKeyPem)));
+    expect(await updater.check()).toMatchObject({ state: 'error', error: 'NETWORK' });
+    expect(await updater.install()).toBe(false);
+    expect(launchInstaller).not.toHaveBeenCalled();
+  });
+
+  it('does not offer an older download as the newer version on offer', async () => {
+    const { updater, files, trusted, launchInstaller } = setup();
+    expect((await updater.check()).state).toBe('ready');
+    // With automatic updates off, the feed offers 1.2.0, and then a check fails.
+    updater.setAutoUpdate(false);
+    const sha512 = createHash('sha512').update(INSTALLER).digest('base64');
+    const newer = { version: '1.2.0', file: 'Planner-Setup-1.2.0.exe', url: 'https://example.test/Planner-Setup-1.2.0.exe', size: INSTALLER.length, sha512 };
+    files.set(FEED, JSON.stringify(signManifest(newer, trusted.privateKeyPem)));
+    expect((await updater.check()).state).toBe('available');
+    files.delete(FEED);
+    expect((await updater.check()).state).toBe('error');
+    expect(await updater.install()).toBe(false);
+    expect(launchInstaller).not.toHaveBeenCalled();
+  });
+
   it('only offers the update when automatic updates are off, and downloads on install', async () => {
     const { updater, transport, launchInstaller } = setup({ autoUpdate: false });
     expect((await updater.check()).state).toBe('available');

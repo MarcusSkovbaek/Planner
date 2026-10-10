@@ -75,6 +75,14 @@ export function SettingsView() {
           <Row label={t('settings.trackingEnabled')} hint={t('settings.trackingEnabledHint')}>
             <Switch checked={tracking.enabled} label={t('settings.trackingEnabled')} onChange={(v) => update({ tracking: { enabled: v } })} testId="tracking-enabled" />
           </Row>
+          <Row label={t('settings.showMeetings')} hint={t('settings.showMeetingsHint')}>
+            <Switch
+              checked={settings.calendar.enabled}
+              label={t('settings.showMeetings')}
+              onChange={(v) => update({ calendar: { enabled: v } })}
+              testId="calendar-enabled"
+            />
+          </Row>
           <Row label={t('settings.idleThreshold')} hint={t('settings.idleThresholdHint')}>
             <NumberSelect value={tracking.idleThresholdMin} options={[2, 3, 5, 10, 15, 30]} format={minutes} onChange={(v) => update({ tracking: { idleThresholdMin: v } })} />
           </Row>

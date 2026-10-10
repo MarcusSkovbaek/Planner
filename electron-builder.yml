@@ -15,6 +15,13 @@ files:
   - '!out/.tsc-*/**'
 asarUnpack:
   - node_modules/koffi/**/*.node
+# The installed Planner.exe ignores ELECTRON_RUN_AS_NODE, NODE_OPTIONS and --inspect and
+# loads only its own app.asar, so it cannot be used to run or inject other code.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  onlyLoadAppFromAsar: true
 extraResources:
   - from: resources
     to: .

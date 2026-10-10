@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme, screen, shell, type Rectangle } from 'electron';
+import { app, BrowserWindow, nativeTheme, screen, type Rectangle } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -87,10 +87,9 @@ export function createMainWindow(options: { show: boolean; iconPath?: string }):
   trackWindowState(win);
 
   // The renderer is a local app: never navigate away or open new windows inside it.
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https:\/\//i.test(url)) void shell.openExternal(url);
-    return { action: 'deny' };
-  });
+  // Links are not passed to the system browser either, since a URL could carry captured
+  // data off the PC; the UI has no external links.
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => {
     const devUrl = process.env.ELECTRON_RENDERER_URL;
     if (!devUrl || !url.startsWith(devUrl)) event.preventDefault();

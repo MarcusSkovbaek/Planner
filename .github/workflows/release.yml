@@ -1,7 +1,9 @@
 name: Release
 
-# Publishes a signed update. Push a tag that matches package.json, e.g.:
-#   npm version patch && git push --follow-tags
+# Publishes a signed update. Either create a release in GitHub's web UI with a new tag
+# such as v1.2.0 (Releases → Draft a new release → Publish), or push such a tag. Creating
+# the tag is a push of that tag, so both run this workflow exactly once. The tag sets the
+# version: the build stamps it into the app, so package.json does not need to change.
 #
 # The signing key is kept away from third-party code: the build (npm packages, tests,
 # packaging) runs without it, and only the publish job gets it, after you approve the
@@ -20,21 +22,28 @@ jobs:
     name: Check tag and signing key
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Tag must match package.json
+      # The tag name comes from whoever created it, so it is read from env and checked
+      # strictly before anything else uses it.
+      - name: Tag must be vMAJOR.MINOR.PATCH
+        id: tag
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          version="$(node -p "require('./package.json').version")"
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+          if ! [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Tag '$TAG' is not a version like v1.2.0"
             exit 1
           fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
       - name: The app must trust an update key
         run: |
           if ! grep -Eq "id: '[0-9a-f]{16}'" src/main/update/trustedKeys.ts; then
-            echo "::error::src/main/update/trustedKeys.ts has no key, so installed apps could not verify this update. Run npm run update:keygen first (see README)."
+            echo "::error::src/main/update/trustedKeys.ts has no key, so installed apps could not verify this update. Run node scripts/update-keygen.mjs first (see README)."
             exit 1
           fi
 
@@ -44,10 +53,11 @@ jobs:
     uses: ./.github/workflows/build-windows.yml
     with:
       npm-cache: false
+      version: ${{ needs.verify.outputs.version }}
 
   publish:
     name: Sign and publish
-    needs: build
+    needs: [verify, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # PLANNER_UPDATE_SIGNING_KEY is a secret of this environment. Protect it with required
@@ -55,6 +65,9 @@ jobs:
     environment: release
     permissions:
       contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.verify.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -73,16 +86,24 @@ jobs:
           PLANNER_UPDATE_SIGNING_KEY: ${{ secrets.PLANNER_UPDATE_SIGNING_KEY }}
         run: |
           node scripts/sign-update.mjs \
-            --installer "release/Planner-Setup-${GITHUB_REF_NAME#v}.exe" \
-            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+            --installer "release/Planner-Setup-$VERSION.exe" \
+            --version "$VERSION" \
+            --base-url "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+      # A release made in the web UI already exists (without files): add the files to it.
+      # A pushed tag has no release yet: create one. The installer goes up before
+      # update.json, so the signed manifest never points at a file that is not there yet.
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            "release/Planner-Setup-${GITHUB_REF_NAME#v}.exe" \
-            release/update.json \
-            --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
-            --title "Planner ${GITHUB_REF_NAME#v}" \
-            --generate-notes
+          installer="release/Planner-Setup-$VERSION.exe"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$installer" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$TAG" release/update.json --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "$installer" release/update.json \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Planner $VERSION" \
+              --generate-notes
+          fi

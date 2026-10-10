@@ -3,7 +3,7 @@ import { useApp } from '@/state/app';
 import { usePlanner } from '@/state/planner';
 import { useI18n } from '@/lib/i18n';
 import { Button, IconButton } from '@/components/ui/Button';
-import { entryFromBlocks } from './entryFactory';
+import { blocksActiveMs, entryFromBlocks } from './entryFactory';
 import type { PlannerData } from './usePlannerData';
 
 /** Floating action bar for multi-selections (captured blocks or entries). */
@@ -19,8 +19,8 @@ export function SelectionBar({ data }: { data: PlannerData }) {
   const entries = data.dayEntries.filter((e) => selectedEntryIds.includes(e.id));
 
   if (blocks.length > 0) {
-    const activeMs = blocks.reduce((sum, b) => sum + b.activeMs, 0);
-    const ctx = { date: data.date, settings, matters };
+    const activeMs = blocksActiveMs(blocks, data.activities);
+    const ctx = { date: data.date, settings, matters, segments: data.activities };
     return (
       <div className="selection-bar" data-testid="selection-bar">
         <span className="sb-count tabular">{t('planner.selected', { n: blocks.length })}</span>
