@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Works offline: the policy stops the page from loading or sending anything. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Planner – opdateringsnøgle</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f8; --card: #ffffff; --text: #1b2130; --muted: #5b6474; --line: #e0e4eb;
+    --accent: #2f5bea; --accent-text: #ffffff; --code: #f1f3f7;
+    --warn-bg: #fff6e4; --warn-text: #694600; --ok: #1d7a4b; --error: #c63b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #13161c; --card: #1b1f27; --text: #e6e9ef; --muted: #9aa3b4; --line: #2b313c;
+      --accent: #7092ff; --accent-text: #0b1020; --code: #11141a;
+      --warn-bg: #2c2312; --warn-text: #f1cf88; --ok: #5ed29a; --error: #ff8080;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 640px; margin: 48px auto; padding: 0 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 28px; box-shadow: 0 1px 2px rgb(0 0 0 / 4%); }
+  h1 { font-size: 22px; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 { font-size: 16px; margin: 0 0 6px; }
+  p { margin: 0 0 14px; color: var(--muted); }
+  code { font: 13px Consolas, ui-monospace, monospace; }
+  button {
+    font: inherit; font-weight: 600; border: 1px solid transparent; border-radius: 9px; padding: 9px 16px;
+    cursor: pointer; background: var(--accent); color: var(--accent-text);
+  }
+  button.secondary { background: transparent; color: var(--accent); border-color: var(--line); }
+  button:disabled { opacity: 0.55; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .step { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  textarea {
+    width: 100%; margin: 0 0 10px; padding: 10px 12px; resize: none; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--code); color: var(--text); font: 13px/1.45 Consolas, ui-monospace, monospace;
+  }
+  .note { background: var(--warn-bg); color: var(--warn-text); border-radius: 9px; padding: 10px 12px; margin: 14px 0 0; }
+  .status { font-size: 14px; color: var(--ok); }
+  .error { color: var(--error); margin: 14px 0 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h1>Opdateringsnøgle til Planner</h1>
+    <p>Siden laver det nøglepar, som opdateringer til Planner signeres med. Alt sker i din browser på denne pc. Siden bruger ikke internettet og sender intet nogen steder hen.</p>
+    <button id="create" type="button">Lav nøgle</button>
+    <p id="error" class="error" role="alert" hidden></p>
+
+    <section id="result" hidden>
+      <div class="step">
+        <h2>1. Gem den hemmelige nøgle</h2>
+        <p>Filen er din private nøgle. Gem en kopi et sikkert sted, fx i en adgangskodemanager, og del den aldrig med nogen.</p>
+        <div class="row">
+          <button id="save" type="button">Gem nøglefil</button>
+          <span id="saved" class="status" role="status" hidden>Hentet – se mappen Overførsler</span>
+        </div>
+        <p class="note">Indholdet af filen skal ind i GitHub som hemmeligheden <strong>PLANNER_UPDATE_SIGNING_KEY</strong>. Åbn filen i Notesblok, og kopiér det hele. Når du har en sikker kopi, så slet filen fra Overførsler.</p>
+      </div>
+      <div class="step">
+        <h2>2. Kopiér linjen til appen</h2>
+        <p>Linjen er den offentlige halvdel og er ikke hemmelig. Indsæt den i <code>src/main/update/trustedKeys.ts</code> lige over <code>// &lt;/trusted-keys&gt;</code>, eller send den til Claude.</p>
+        <textarea id="line" rows="3" readonly aria-label="Linje til trustedKeys.ts"></textarea>
+        <div class="row">
+          <button id="copy" type="button" class="secondary">Kopiér linjen</button>
+          <span id="copied" class="status" role="status" hidden>Kopieret</span>
+        </div>
+        <p class="note">Brug filen og linjen fra samme gang. Laver du en ny nøgle, skal begge dele skiftes.</p>
+      </div>
+    </section>
+  </div>
+</main>
+<script>
+'use strict';
+const ED25519 = { name: 'Ed25519' };
+
+function base64(bytes) {
+  let text = '';
+  for (const byte of new Uint8Array(bytes)) text += String.fromCharCode(byte);
+  return btoa(text);
+}
+
+function toPem(pkcs8) {
+  const body = base64(pkcs8).match(/.{1,64}/g).join('\n');
+  return `-----BEGIN PRIVATE KEY-----\n${body}\n-----END PRIVATE KEY-----\n`;
+}
+
+/**
+ * Makes a new Ed25519 key pair in the same format as scripts/update-keygen.mjs: the private
+ * key as a PKCS#8 PEM, and the trustedKeys.ts line with the raw public key (base64) and its id
+ * (the first 16 hex characters of SHA-256 of the raw public key).
+ */
+async function createUpdateKey(subtle, today) {
+  const pair = await subtle.generateKey(ED25519, true, ['sign', 'verify']);
+  const raw = new Uint8Array(await subtle.exportKey('raw', pair.publicKey));
+  const pkcs8 = await subtle.exportKey('pkcs8', pair.privateKey);
+  const hash = new Uint8Array(await subtle.digest('SHA-256', raw));
+  const keyId = Array.from(hash.slice(0, 8), (b) => b.toString(16).padStart(2, '0')).join('');
+  // Check the pair before handing it out: the private key must sign what the public key verifies.
+  const probe = new TextEncoder().encode('planner-update-key-check');
+  const signature = await subtle.sign(ED25519, pair.privateKey, probe);
+  if (!(await subtle.verify(ED25519, pair.publicKey, signature, probe))) throw new Error('the key pair failed its self-check');
+  const publicKey = base64(raw);
+  return {
+    keyId,
+    publicKey,
+    privateKeyPem: toPem(pkcs8),
+    line: `  { id: '${keyId}', publicKey: '${publicKey}' }, // added ${today}`,
+  };
+}
+
+// Lets the unit tests run the same code in Node.
+if (typeof module === 'object' && module) module.exports = { createUpdateKey };
+
+if (typeof document !== 'undefined') {
+  const $ = (id) => document.getElementById(id);
+  let key = null;
+
+  $('create').addEventListener('click', async () => {
+    $('error').hidden = true;
+    try {
+      if (!window.isSecureContext || !crypto.subtle) throw new Error('no Web Crypto');
+      key = await createUpdateKey(crypto.subtle, new Date().toISOString().slice(0, 10));
+    } catch (err) {
+      $('error').textContent = `Nøglen kunne ikke laves i denne browser. Brug en opdateret Microsoft Edge eller Google Chrome. (${err && err.message ? err.message : err})`;
+      $('error').hidden = false;
+      return;
+    }
+    $('line').value = key.line;
+    $('result').hidden = false;
+    $('create').disabled = true;
+    $('create').textContent = 'Nøglen er lavet';
+  });
+
+  $('save').addEventListener('click', () => {
+    const url = URL.createObjectURL(new Blob([key.privateKeyPem], { type: 'application/x-pem-file' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'planner-update-signing-key.pem';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    $('saved').hidden = false;
+  });
+
+  $('copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('line').value);
+    } catch {
+      $('line').select();
+      document.execCommand('copy');
+    }
+    $('copied').hidden = false;
+  });
+}
+</script>
+</body>
+</html>
