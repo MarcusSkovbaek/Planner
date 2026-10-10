@@ -3,7 +3,8 @@
  *
  * Only someone holding the matching private key can publish an update that installed
  * copies will accept. The private key never belongs in this repository: generate it on
- * your own machine with `npm run update:keygen`, which appends the public half here.
+ * your own machine with `node scripts/update-keygen.mjs` (see README), which prints the
+ * line holding the public half to add here.
  *
  * While this list is empty the updater is disabled (fail closed): nothing is installed.
  * To rotate keys, add the new key, ship one release signed with the old key, then

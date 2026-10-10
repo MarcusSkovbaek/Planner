@@ -10,6 +10,10 @@ on:
         description: Restore the npm download cache. Releases turn it off and install from the registry only.
         type: boolean
         default: true
+      version:
+        description: App version for this build only (e.g. 1.2.0), taken from the release tag. Empty keeps package.json's version.
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -31,6 +35,21 @@ jobs:
       - run: npm ci
       # Includes a test that samples the real foreground window through user32.
       - run: npm test
+      # Stamps the release version into package.json inside this runner only (never
+      # committed), so the app and the installer name report the tagged version. The input
+      # reaches the script through env, never by expression interpolation, so it cannot inject code.
+      - name: Set app version for this build
+        if: inputs.version != ''
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Invalid version '$VERSION' (expected MAJOR.MINOR.PATCH, e.g. 1.2.0)"
+            exit 1
+          fi
+          npm pkg set version="$VERSION"
+          echo "Building Planner $(node -p "require('./package.json').version")"
       - run: npm run build
       - name: Package installer
         run: npx electron-builder --win --x64 --publish never
