@@ -65,6 +65,17 @@ Du skal kun gøre dette én gang. Den private nøgle laves og bliver på din ege
 
 **1. Lav nøglen**
 
+Den nemmeste måde kræver kun din browser:
+
+1. Åbn `scripts/update-keygen.html` på GitHub, og klik på **Download raw file** (pilen ned øverst til højre for filen).
+2. Dobbeltklik på den hentede fil. Den åbner i Edge eller Chrome.
+3. Klik **Lav nøgle** og derefter **Gem nøglefil**. Nøglefilen `planner-update-signing-key.pem` lander i mappen Overførsler.
+4. Klik **Kopiér linjen**. Linjen begynder med `{ id: '` og er den offentlige nøgle. Den er ikke hemmelig.
+
+Siden laver nøglen i browseren på din PC. Den bruger ikke internettet og sender intet nogen steder hen.
+
+Du kan også lave nøglen med Node.js:
+
 1. Installér Node.js (versionen mærket _LTS_) fra [nodejs.org](https://nodejs.org). Vælg standardindstillingerne.
 2. Åbn repositoryet på GitHub. Klik på den grønne knap **Code → Download ZIP**.
 3. Højreklik på ZIP-filen, og vælg **Udpak alle**.
@@ -91,10 +102,10 @@ Du kan også bare sende linjen til Claude og bede om at få den lagt ind.
 1. På GitHub: **Settings → Environments → New environment**. Kald det `release`.
 2. Sæt hak i **Required reviewers**, og tilføj dig selv. Så kan intet signeres uden din godkendelse.
 3. Under **Deployment branches and tags**: vælg _Selected branches and tags_ → **Add deployment branch or tag rule** → vælg _Tag_ → skriv `v*.*.*`.
-4. Klik **Add environment secret**. Navn: `PLANNER_UPDATE_SIGNING_KEY`. Værdi: hele indholdet af `.pem`-filen. Åbn den i Notesblok (kommandoen viser den præcise sti), tryk Ctrl+A og Ctrl+C, og indsæt i feltet.
+4. Klik **Add environment secret**. Navn: `PLANNER_UPDATE_SIGNING_KEY`. Værdi: hele indholdet af `.pem`-filen. Åbn filen i Notesblok, tryk Ctrl+A og Ctrl+C, og indsæt i feltet.
 5. Gem en kopi af `.pem`-filen et sikkert sted, for eksempel i en password manager. Mister du den, kan de installerede kopier ikke længere opdateres automatisk.
 
-Du kan slette den udpakkede mappe og ZIP-filen bagefter. Den private nøgle ligger ikke i dem.
+Lavede du nøglen i browseren, så slet nøglefilen fra Overførsler, når du har gemt en sikker kopi. Lavede du den med Node.js, kan du slette den udpakkede mappe og ZIP-filen. Den private nøgle ligger ikke i dem.
 
 **4. Installér den første signerede version manuelt**
 
