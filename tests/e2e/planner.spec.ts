@@ -193,6 +193,92 @@ test.describe('planner', () => {
     await page.getByTestId('resume-tracking').click();
     await expect(indicator).toContainText('Opfanger');
   });
+
+  test('cancels a drag when the window loses focus or the right button is pressed mid-drag', async ({ page }) => {
+    await openApp(page);
+    await gotoDayWithData(page);
+    await createEveningEntry(page);
+    const start = await page.getByTestId('start-input').inputValue();
+    const card = page.locator('[data-testid=entry-card].active');
+    const drag = async () => {
+      const box = (await card.boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + HOUR, { steps: 8 });
+      await expect(page.locator('body.is-dragging')).toHaveCount(1);
+      return box;
+    };
+
+    // Alt+Tab mid-drag: the release may never reach the window, so the drag must not linger.
+    let box = await drag();
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await expect(page.locator('body.is-dragging')).toHaveCount(0);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 2 * HOUR, { steps: 4 });
+    await page.mouse.up();
+    await expect(page.getByTestId('start-input')).toHaveValue(start);
+
+    // A right-click mid-drag cancels it instead of opening a context menu over a live drag.
+    box = await drag();
+    await page.mouse.down({ button: 'right' });
+    await page.mouse.up({ button: 'right' });
+    await expect(page.locator('.menu')).toHaveCount(0);
+    await page.mouse.up();
+    await expect(page.getByTestId('start-input')).toHaveValue(start);
+
+    // A pointer released outside the window (no pointerup) ends the drag on the next move.
+    box = await drag();
+    await page.evaluate(
+      ({ x, y }) => window.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, buttons: 0, pointerType: 'mouse' })),
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 + 2 * HOUR },
+    );
+    await expect(page.locator('body.is-dragging')).toHaveCount(0);
+    await page.mouse.up();
+    await expect(page.getByTestId('start-input')).toHaveValue(start);
+  });
+
+  test('hides the hover card of a captured block when the day changes under it', async ({ page }) => {
+    await openApp(page);
+    await gotoDayWithData(page);
+    const card = page.getByTestId('captured-card').nth(2);
+    await card.scrollIntoViewIfNeeded();
+    await card.hover();
+    await expect(page.locator('.hover-card')).toBeVisible();
+    // Tomorrow has no captured time, so nothing new is under the pointer.
+    await page.keyboard.press('t');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByTestId('captured-card')).toHaveCount(0);
+    await expect(page.locator('.hover-card')).toHaveCount(0);
+  });
+
+  test('ignores planner shortcuts while a context menu is open', async ({ page }) => {
+    await openApp(page);
+    await gotoDayWithData(page);
+    const date = await page.getByTestId('planner-date').textContent();
+    const card = page.getByTestId('captured-card').nth(1);
+    await card.scrollIntoViewIfNeeded();
+    await card.click({ button: 'right' });
+    await expect(page.locator('.menu')).toBeVisible();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByTestId('planner-date')).toHaveText(date!);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.menu')).toHaveCount(0);
+  });
+
+  test('Escape in a time field throws the typed time away', async ({ page }) => {
+    await openApp(page);
+    await gotoDayWithData(page);
+    await createEveningEntry(page);
+    const start = await page.getByTestId('start-input').inputValue();
+    const end = await page.getByTestId('end-input').inputValue();
+    await page.getByTestId('start-input').fill('10:00');
+    await page.getByTestId('start-input').press('Escape');
+    await page.getByTestId('end-input').fill('23:45');
+    await page.getByTestId('end-input').press('Escape');
+    await expect(page.getByTestId('start-input')).toHaveValue(start);
+    await expect(page.getByTestId('end-input')).toHaveValue(end);
+    await expect(page.locator('[data-testid=entry-card].active')).toContainText(`${start} – ${end}`);
+    await expect(page.getByTestId('entry-editor')).toHaveClass(/open/);
+  });
 });
 
 test.describe('other views', () => {

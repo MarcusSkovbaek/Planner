@@ -335,6 +335,17 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
     hoverTimer.current = setTimeout(() => setHover({ block, rect: element.getBoundingClientRect() }), 550);
   }, []);
 
+  // A card that disappears under the pointer (day switch, view switch, deleted or hidden block)
+  // never reports that the pointer left it, so drop its hover card here.
+  useEffect(() => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    setHover(null);
+  }, [date, active]);
+  useEffect(() => () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+  }, []);
+  const hovered = hover && data.blocks.some((b) => b.id === hover.block.id) ? hover : null;
+
   const dayStart = settings.timesheet.dayStartHour * 60;
   const dayEnd = settings.timesheet.dayEndHour * 60;
   const nowMin = minuteOfDay(now);
@@ -493,7 +504,7 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
           document.body,
         )}
 
-      {hover && !drag && <BlockHoverCard block={hover.block} rect={hover.rect} />}
+      {hovered && !drag && <BlockHoverCard block={hovered.block} rect={hovered.rect} />}
     </div>
   );
 }

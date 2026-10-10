@@ -103,16 +103,26 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
    *  other, even before React has re-rendered with the previous one. */
   const latest = () => usePlanner.getState().entries.find((e) => e.id === entry.id) ?? entry;
 
+  /** Set by Escape so the blur that follows throws the typed time away instead of saving it. */
+  const discardTimes = useRef(false);
+  const resetTimes = () => {
+    const current = latest();
+    setStartText(formatClock(current.startMin));
+    setEndText(formatClock(current.endMin));
+    setHoursText(hoursValue(current.endMin - current.startMin));
+  };
+  const unlessDiscarded = (commit: () => void) => () => {
+    if (!discardTimes.current) return commit();
+    discardTimes.current = false;
+    resetTimes();
+  };
+
   const commitTimes = (startMin: number, endMin: number) => {
     const current = latest();
     const start = clamp(Math.round(startMin), 0, MINUTES_PER_DAY - inc);
     const end = clamp(Math.round(endMin), start + 1, MINUTES_PER_DAY);
     if (start !== current.startMin || end !== current.endMin) void updateEntry(entry.id, { startMin: start, endMin: end }, { undoable: true });
-    else {
-      setStartText(formatClock(current.startMin));
-      setEndText(formatClock(current.endMin));
-      setHoursText(hoursValue(current.endMin - current.startMin));
-    }
+    else resetTimes();
   };
 
   const commitStart = () => {
@@ -140,6 +150,11 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
     if (e.key === 'Enter') {
       e.preventDefault();
       commit();
+      (e.target as HTMLInputElement).blur();
+    } else if (e.key === 'Escape') {
+      // Escape cancels the typing; a second Escape (outside the field) closes the editor.
+      e.preventDefault();
+      discardTimes.current = true;
       (e.target as HTMLInputElement).blur();
     }
   };
@@ -274,7 +289,7 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
               value={startText}
               disabled={locked}
               onChange={(e) => setStartText(e.target.value)}
-              onBlur={commitStart}
+              onBlur={unlessDiscarded(commitStart)}
               onKeyDown={onEnter(commitStart)}
               data-testid="start-input"
             />
@@ -286,7 +301,7 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
               value={endText}
               disabled={locked}
               onChange={(e) => setEndText(e.target.value)}
-              onBlur={commitEnd}
+              onBlur={unlessDiscarded(commitEnd)}
               onKeyDown={onEnter(commitEnd)}
               data-testid="end-input"
             />
@@ -300,7 +315,7 @@ function EditorContent({ entry, data, visible }: { entry: TimeEntry; data: Plann
                 disabled={locked}
                 inputMode="decimal"
                 onChange={(e) => setHoursText(e.target.value)}
-                onBlur={commitHours}
+                onBlur={unlessDiscarded(commitHours)}
                 onKeyDown={onEnter(commitHours)}
                 data-testid="hours-input"
               />

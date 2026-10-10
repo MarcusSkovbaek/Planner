@@ -16,7 +16,8 @@ const MAX_SPEED = 18;
 
 /**
  * Tracks a pointer gesture on the window (so it keeps working outside the element),
- * with click/drag discrimination, Escape to cancel and edge auto-scrolling.
+ * with click/drag discrimination, Escape to cancel and edge auto-scrolling. Losing the
+ * window (Alt+Tab), a release that never reached the window and a right-click also cancel.
  */
 export function startGesture(down: PointerEvent | React.PointerEvent, handlers: GestureHandlers): void {
   const startX = down.clientX;
@@ -44,6 +45,8 @@ export function startGesture(down: PointerEvent | React.PointerEvent, handlers: 
   };
 
   const onMove = (event: PointerEvent) => {
+    // No button held: the release happened where the window could not see it.
+    if (event.pointerType === 'mouse' && event.buttons === 0) return onCancel();
     x = event.clientX;
     y = event.clientY;
     if (!moved && Math.hypot(x - startX, y - startY) < threshold) return;
@@ -61,6 +64,8 @@ export function startGesture(down: PointerEvent | React.PointerEvent, handlers: 
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onCancel);
     window.removeEventListener('keydown', onKey, true);
+    window.removeEventListener('contextmenu', onContextMenu, true);
+    window.removeEventListener('blur', onCancel);
     if (frame) cancelAnimationFrame(frame);
     document.body.classList.remove('is-dragging');
     document.body.style.cursor = previousCursor;
@@ -84,8 +89,18 @@ export function startGesture(down: PointerEvent | React.PointerEvent, handlers: 
     }
   };
 
+  // A right-click mid-drag cancels the drag instead of opening a menu over it.
+  const onContextMenu = (event: MouseEvent) => {
+    if (!moved) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onCancel();
+  };
+
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onCancel);
   window.addEventListener('keydown', onKey, true);
+  window.addEventListener('contextmenu', onContextMenu, true);
+  window.addEventListener('blur', onCancel);
 }

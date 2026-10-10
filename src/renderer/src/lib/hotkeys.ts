@@ -19,7 +19,8 @@ export function comboOf(event: KeyboardEvent): string {
 
 /**
  * Global keyboard shortcuts. Ignored while typing in inputs (except Escape) and while a
- * modal dialog is open, so shortcuts never fight with text entry.
+ * modal dialog or a popover (context menu, date picker, filter) is open, so shortcuts never
+ * fight with text entry or act behind a menu that is still showing.
  */
 export function useHotkeys(map: HotkeyMap, enabled = true): void {
   const ref = useRef(map);
@@ -30,7 +31,7 @@ export function useHotkeys(map: HotkeyMap, enabled = true): void {
       if (event.defaultPrevented) return;
       const combo = comboOf(event);
       if (combo !== 'escape' && isEditable(event.target)) return;
-      if (document.querySelector('.dialog-overlay') && combo !== 'escape') return;
+      if (combo !== 'escape' && document.querySelector('.dialog-overlay, .popover')) return;
       const handler = ref.current[combo];
       if (handler && handler(event) !== false) event.preventDefault();
     };
