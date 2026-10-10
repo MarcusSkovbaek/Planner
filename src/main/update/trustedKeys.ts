@@ -19,5 +19,6 @@ export interface TrustedKey {
 
 export const TRUSTED_UPDATE_KEYS: readonly TrustedKey[] = [
   // <trusted-keys> (managed by scripts/update-keygen.mjs)
+  { id: '05d644a966c20df6', publicKey: 'cLagCHrAEc5DP1HQ1UjF/+3ih9BfMwZqeeqgDVGZtHo=' }, // added 2026-10-10
   // </trusted-keys>
 ];
