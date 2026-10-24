@@ -94,6 +94,8 @@ export const da = {
     goToToday: 'Gå til i dag',
     pickDate: 'Vælg dato',
     zoomIn: 'Zoom ind',
+    resizeColumns: 'Træk for at ændre kolonnernes bredde. Dobbeltklik for standardbredde.',
+    dayBarTitle: '{registered} t registreret · {captured} t opfanget, ikke registreret',
     zoomOut: 'Zoom ud',
     filters: 'Filtre',
     shortcuts: 'Tastaturgenveje',

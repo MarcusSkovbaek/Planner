@@ -281,6 +281,47 @@ test.describe('planner', () => {
   });
 });
 
+test.describe('toolbar and layout', () => {
+  test('keeps the toolbar in place when changing day and shows unregistered captured time in the week bars', async ({ page }) => {
+    await openApp(page);
+    const strip = page.locator('.week-strip');
+    const before = (await strip.boundingBox())!;
+    await expect(page.getByTestId('go-today')).toBeHidden();
+    await gotoDayWithData(page);
+    await expect(page.getByTestId('go-today')).toBeVisible();
+    const after = (await strip.boundingBox())!;
+    expect(Math.abs(after.x - before.x)).toBeLessThan(1);
+    // A day with captured activity that is not all registered shows it in the second colour.
+    const date = await page.locator('.week-day[aria-selected="true"]').getAttribute('data-testid');
+    const open = page.getByTestId(date!.replace('week-day-', 'week-open-'));
+    expect((await open.boundingBox())!.width).toBeGreaterThan(0);
+  });
+
+  test('resizes the two columns and remembers the width', async ({ page }) => {
+    await openApp(page);
+    const entries = page.getByTestId('entries-column');
+    const start = (await entries.boundingBox())!.width;
+    const handle = page.getByTestId('column-resizer');
+    const box = (await handle.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 150, box.y + box.height / 2, { steps: 5 });
+    await page.mouse.up();
+    const wider = (await entries.boundingBox())!.width;
+    expect(wider).toBeGreaterThan(start + 100);
+    await page.reload();
+    await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+    expect(Math.abs((await entries.boundingBox())!.width - wider)).toBeLessThan(3);
+    // Keyboard: arrow keys move the divider without changing the day; double-click resets it.
+    const day = await page.getByTestId('planner-date').textContent();
+    await handle.focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.getByTestId('planner-date')).toHaveText(day!);
+    await handle.dblclick();
+    await expect.poll(async () => Math.abs((await entries.boundingBox())!.width - start)).toBeLessThan(3);
+  });
+});
+
 test.describe('other views', () => {
   test('switches language and theme', async ({ page }) => {
     await openApp(page);

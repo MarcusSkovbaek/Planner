@@ -95,6 +95,8 @@ export const en: Dictionary = {
     goToToday: 'Go to today',
     pickDate: 'Pick date',
     zoomIn: 'Zoom in',
+    resizeColumns: 'Drag to change the column widths. Double-click for the default width.',
+    dayBarTitle: '{registered} h registered · {captured} h captured, not registered',
     zoomOut: 'Zoom out',
     filters: 'Filters',
     shortcuts: 'Keyboard shortcuts',

@@ -22,6 +22,7 @@ export function PlannerToolbar({ data }: { data: PlannerData }) {
   const date = usePlanner((s) => s.date);
   const weekStart = usePlanner((s) => s.weekStart);
   const entries = usePlanner((s) => s.entries);
+  const unlinkedByDay = usePlanner((s) => s.unlinkedByDay);
   const { setDate, createEntries, setStatus } = usePlanner.getState();
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLButtonElement>(null);
@@ -67,7 +68,13 @@ export function PlannerToolbar({ data }: { data: PlannerData }) {
         <div className="week-strip" role="tablist" aria-label={t('common.week', { n: isoWeek(date) })}>
           {week.map((d) => {
             const min = minutesByDay.get(d) ?? 0;
-            const ratio = goalMin ? Math.min(1, min / goalMin) : 0;
+            // Captured time not yet turned into entries; the day on screen is counted live.
+            const openMin = (d === date ? data.summary.capturedMs - data.summary.convertedMs : (unlinkedByDay[d] ?? 0)) / 60_000;
+            // The bar spans the daily goal, or more when registered plus open time exceeds it, so
+            // open time stays visible on a day whose goal is already met.
+            const scale = Math.max(goalMin, min + Math.max(0, openMin));
+            const ratio = scale ? min / scale : 0;
+            const openRatio = scale ? Math.max(0, openMin) / scale : 0;
             const weekend = [5, 6].includes(week.indexOf(d));
             return (
               <button
@@ -75,8 +82,9 @@ export function PlannerToolbar({ data }: { data: PlannerData }) {
                 type="button"
                 role="tab"
                 aria-selected={d === date}
-                className={cx('week-day', d === today && 'today', weekend && 'weekend', ratio >= 1 && 'complete')}
+                className={cx('week-day', d === today && 'today', weekend && 'weekend', goalMin > 0 && min >= goalMin && 'complete')}
                 onClick={() => setDate(d)}
+                title={t('planner.dayBarTitle', { registered: hoursValue(min, 1), captured: hoursValue(Math.max(0, openMin), 1) })}
                 data-testid={`week-day-${d}`}
               >
                 <span className="wd-top">
@@ -86,7 +94,8 @@ export function PlannerToolbar({ data }: { data: PlannerData }) {
                 <span className="wd-bottom">
                   <span className="wd-hours tabular">{min ? hoursValue(min, 1) : '–'}</span>
                   <span className="wd-bar">
-                    <span style={{ width: `${ratio * 100}%` }} />
+                    <span className="wd-bar-registered" style={{ width: `${ratio * 100}%` }} />
+                    <span className="wd-bar-open" style={{ width: `${openRatio * 100}%` }} data-testid={`week-open-${d}`} />
                   </span>
                 </span>
               </button>
@@ -115,11 +124,18 @@ export function PlannerToolbar({ data }: { data: PlannerData }) {
             }}
           />
         </Popover>
-        {date !== today && (
-          <Button size="sm" variant="secondary" onClick={() => setDate(today)} data-testid="go-today">
-            {t('common.today')}
-          </Button>
-        )}
+        {/* Always rendered so the toolbar keeps its layout; hidden while today is shown. */}
+        <Button
+          size="sm"
+          variant="secondary"
+          className={cx('go-today', date === today && 'is-hidden')}
+          onClick={() => setDate(today)}
+          aria-hidden={date === today || undefined}
+          tabIndex={date === today ? -1 : undefined}
+          data-testid="go-today"
+        >
+          {t('common.today')}
+        </Button>
       </div>
 
       <div className="toolbar-actions">
@@ -138,7 +154,8 @@ export function PlannerToolbar({ data }: { data: PlannerData }) {
         >
           <span className="label-long">{t('planner.releaseDay')}</span>
           <span className="label-short">{t('planner.release')}</span>
-          {drafts.length > 0 && <span className="btn-count tabular">{drafts.length}</span>}
+          {/* The count keeps its place when it is zero, so the buttons do not shift. */}
+          <span className={cx('btn-count tabular', !drafts.length && 'is-empty')}>{drafts.length}</span>
         </Button>
         <Button variant="primary" className="new-entry" icon={<Plus />} onClick={newEntry} data-testid="new-entry" title="N">
           <span className="label-long">{t('planner.newEntryLong')}</span>

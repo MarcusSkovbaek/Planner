@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
     minBlockMin: 2,
     showConverted: true,
     hiddenKinds: [],
+    entriesShare: 0.45,
   },
   calendar: {
     enabled: true,
@@ -101,6 +102,7 @@ export function normalizeSettings(raw: unknown): Settings {
     },
     planner: {
       hourHeight: clampNumber(s.planner.hourHeight, 48, 320, d.planner.hourHeight),
+      entriesShare: clampNumber(s.planner.entriesShare, 0.25, 0.75, d.planner.entriesShare),
       minBlockMin: clampNumber(s.planner.minBlockMin, 0, 60, d.planner.minBlockMin),
       showConverted: Boolean(s.planner.showConverted),
       hiddenKinds: Array.isArray(s.planner.hiddenKinds)

@@ -312,6 +312,22 @@ export class PlannerService implements PlannerApi {
     }
   }
 
+  async getUnlinkedCaptured(from: DateKey, to: DateKey): Promise<Record<DateKey, number>> {
+    if (!isDateKey(from) || !isDateKey(to) || to < from) fail(ApiErrorCode.InvalidInput, 'range');
+    const linked = new Set<string>();
+    for (const e of this.entries.values()) for (const id of e.activityIds) linked.add(id);
+    const excluded = new Set(this.settings.tracking.excludedApps);
+    const result: Record<DateKey, number> = {};
+    // A week is what the planner asks for; the cap keeps a bad range from reading every file.
+    for (let date = from, n = 0; date <= to && n < 62; date = addDays(date, 1), n++) {
+      let ms = 0;
+      for (const a of await this.loadActivities(date)) if (!excluded.has(a.app) && !linked.has(a.id)) ms += Math.max(0, a.end - a.start);
+      result[date] = ms;
+    }
+    this.evictActivityCache();
+    return result;
+  }
+
   // ── Matters ───────────────────────────────────────────────────────────────
 
   async listMatters(): Promise<Matter[]> {
