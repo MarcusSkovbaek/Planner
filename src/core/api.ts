@@ -45,6 +45,8 @@ export interface PlannerApi {
   deleteActivities(date: DateKey, ids: string[]): Promise<void>;
   /** Meetings from the local calendar on `date`. Slow (seconds), so it is separate from `getDay`. */
   getMeetings(date: DateKey): Promise<DayMeetings>;
+  /** Captured time per day that no entry is linked to yet (ms), for the week overview. */
+  getUnlinkedCaptured(from: DateKey, to: DateKey): Promise<Record<DateKey, number>>;
 
   listMatters(): Promise<Matter[]>;
   saveMatter(input: MatterInput): Promise<Matter>;
@@ -77,6 +79,7 @@ export const API_METHODS = [
   'setEntryStatus',
   'deleteActivities',
   'getMeetings',
+  'getUnlinkedCaptured',
   'listMatters',
   'saveMatter',
   'deleteMatter',

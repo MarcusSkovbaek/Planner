@@ -160,6 +160,8 @@ export interface Settings {
     minBlockMin: number;
     showConverted: boolean;
     hiddenKinds: ActivityKind[];
+    /** Share of the board's width taken by the entries column; captured time gets the rest. */
+    entriesShare: number;
   };
   calendar: {
     /** Show meetings from the local Outlook calendar as suggestions in the planner. */

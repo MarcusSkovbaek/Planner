@@ -50,6 +50,9 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
     usePlanner.getState();
 
   const { hourHeight } = settings.planner;
+  // Set while the column divider is dragged; saved to the settings when it is let go.
+  const [previewShare, setPreviewShare] = useState<number | null>(null);
+  const entriesShare = previewShare ?? settings.planner.entriesShare;
   const pxPerMin = hourHeight / 60;
   const inc = settings.timesheet.incrementMin;
   const { date } = data;
@@ -361,7 +364,10 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
   );
 
   return (
-    <div className="board" style={{ '--hour-h': `${hourHeight}px` } as React.CSSProperties}>
+    <div
+      className="board"
+      style={{ '--hour-h': `${hourHeight}px`, '--entries-fr': `${entriesShare}fr`, '--captured-fr': `${1 - entriesShare}fr` } as React.CSSProperties}
+    >
       <div className="board-scroller" ref={scrollerRef} data-testid="board-scroller">
         <div className="board-head-row">
           <div className="board-head gutter-head" />
@@ -371,7 +377,13 @@ export function Board({ data, active }: { data: PlannerData; active: boolean }) 
               {hours(data.summary.totalMin)}
             </span>
           </div>
-          <div className="board-head">
+          <div className="board-head captured-head">
+            <ColumnResizer
+              share={entriesShare}
+              label={t('planner.resizeColumns')}
+              onPreview={setPreviewShare}
+              onCommit={(share) => void updateSettings({ planner: { entriesShare: share } })}
+            />
             <span className="board-head-title">{t('planner.captured')}</span>
             <span className="board-head-total tabular">{hours(capturedTotalMin)}</span>
             <div className="board-head-spacer" />
@@ -609,5 +621,72 @@ function MeetingHoverCard({ block, meeting, rect }: { block: BlockView; meeting:
       )}
     </div>,
     document.body,
+  );
+}
+
+const MIN_SHARE = 0.25;
+const MAX_SHARE = 0.75;
+const DEFAULT_SHARE = 0.45;
+
+/** The divider between the two columns: drag it, or use the arrow keys, to share the width differently. */
+function ColumnResizer({
+  share,
+  label,
+  onPreview,
+  onCommit,
+}: {
+  share: number;
+  label: string;
+  onPreview: (share: number | null) => void;
+  onCommit: (share: number) => void;
+}) {
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const handle = event.currentTarget;
+    const gutter = handle.closest('.board-head-row')?.firstElementChild;
+    const row = handle.closest('.board-head-row');
+    if (event.button !== 0 || !row || !gutter) return;
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    const left = gutter.getBoundingClientRect().right;
+    const width = row.getBoundingClientRect().right - left;
+    let next = share;
+    const move = (e: PointerEvent) => {
+      next = clamp((e.clientX - left) / width, MIN_SHARE, MAX_SHARE);
+      onPreview(next);
+    };
+    const end = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', end);
+      handle.removeEventListener('pointercancel', end);
+      if (next !== share) onCommit(next);
+      onPreview(null);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  };
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    const step = event.key === 'ArrowLeft' ? -0.05 : event.key === 'ArrowRight' ? 0.05 : 0;
+    if (!step) return;
+    // Handled here, so the planner's arrow-key shortcuts do not change the day.
+    event.preventDefault();
+    onCommit(clamp(Math.round((share + step) * 100) / 100, MIN_SHARE, MAX_SHARE));
+  };
+  return (
+    <div
+      className="column-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={label}
+      aria-valuemin={MIN_SHARE * 100}
+      aria-valuemax={MAX_SHARE * 100}
+      aria-valuenow={Math.round(share * 100)}
+      title={label}
+      tabIndex={0}
+      onPointerDown={onPointerDown}
+      onDoubleClick={() => onCommit(DEFAULT_SHARE)}
+      onKeyDown={onKeyDown}
+      data-testid="column-resizer"
+    />
   );
 }

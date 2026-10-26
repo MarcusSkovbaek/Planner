@@ -7,7 +7,9 @@
 
 /* ── Toolbar ─────────────────────────────────────────────────────────────── */
 .toolbar {
-  display: flex;
+  /* Fixed columns: the week strip stays put whatever the date or the buttons show. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
   align-items: center;
   gap: 16px;
   height: var(--toolbar-h);
@@ -17,8 +19,7 @@
   border-bottom: 1px solid var(--border);
 }
 .toolbar-date {
-  flex: 1 1 0;
-  min-width: 110px;
+  min-width: 0;
 }
 .toolbar-title {
   font-size: 17px;
@@ -122,24 +123,33 @@
 }
 .wd-bar {
   flex: 1;
+  display: flex;
   height: 3px;
   border-radius: 2px;
   background: var(--border);
   overflow: hidden;
 }
-.wd-bar span {
-  display: block;
+.wd-bar > span {
+  flex: none;
   height: 100%;
-  border-radius: inherit;
-  background: var(--m-unreleased);
   transition: width var(--dur-slow) var(--ease-out);
 }
-.week-day.complete .wd-bar span {
+.wd-bar-registered {
+  background: var(--m-unreleased);
+}
+.week-day.complete .wd-bar-registered {
   background: var(--success);
+}
+/* Captured time not yet registered. */
+.wd-bar-open {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.go-today.is-hidden,
+.btn-count.is-empty {
+  visibility: hidden;
 }
 
 .toolbar-actions {
-  flex: 1 0 0;
   min-width: max-content;
   display: flex;
   align-items: center;
@@ -159,7 +169,7 @@
 .btn-count {
   display: inline-grid;
   place-items: center;
-  min-width: 18px;
+  min-width: 24px;
   height: 18px;
   margin-left: 6px;
   padding: 0 5px;
@@ -202,7 +212,7 @@
 .board-head-row,
 .board-body {
   display: grid;
-  grid-template-columns: var(--gutter-w) minmax(0, 1fr) minmax(0, 1.2fr);
+  grid-template-columns: var(--gutter-w) minmax(0, var(--entries-fr, 1fr)) minmax(0, var(--captured-fr, 1.2fr));
 }
 .board-head-row {
   position: sticky;
@@ -242,6 +252,38 @@
 }
 .board-head-spacer {
   flex: 1;
+}
+.captured-head {
+  position: relative;
+}
+.column-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  z-index: 2;
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.column-resizer::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 3px;
+  width: 3px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background var(--dur-fast) ease;
+}
+.column-resizer:hover::after,
+.column-resizer:focus-visible::after,
+.column-resizer:active::after {
+  background: var(--accent);
+}
+.column-resizer:focus-visible {
+  outline: none;
 }
 
 .filter-button {
@@ -404,7 +446,7 @@
   bottom: 0;
   z-index: 4;
   display: grid;
-  grid-template-columns: var(--gutter-w) minmax(0, 1fr) minmax(0, 1.2fr);
+  grid-template-columns: var(--gutter-w) minmax(0, var(--entries-fr, 1fr)) minmax(0, var(--captured-fr, 1.2fr));
   pointer-events: none;
 }
 .board-empty-cell {

@@ -25,6 +25,8 @@ interface PlannerState {
   weekStart: DateKey;
   /** Entries of the week containing `date`. */
   entries: TimeEntry[];
+  /** Captured time per day of the week not yet linked to an entry (ms), for the week bars. */
+  unlinkedByDay: Record<DateKey, number>;
   /** Captured activity of `date`. */
   activities: ActivitySegment[];
   activitiesDate: DateKey | null;
@@ -107,6 +109,7 @@ export const usePlanner = create<PlannerState>((set, get) => {
     date: dateKeyOf(Date.now()),
     weekStart: startOfWeek(dateKeyOf(Date.now())),
     entries: [],
+    unlinkedByDay: {},
     activities: [],
     activitiesDate: null,
     meetings: [],
@@ -124,12 +127,16 @@ export const usePlanner = create<PlannerState>((set, get) => {
       // Not awaited: reading the calendar can take seconds and must never hold up the day.
       void get().loadMeetings(date);
       try {
-        const [day, week] = await Promise.all([
+        const [day, week, unlinkedByDay] = await Promise.all([
           api().getDay(date),
           api().getEntries(weekStart, addDays(weekStart, 6)),
+          // Only feeds the week bars, so a failure must not stop the day from loading.
+          api()
+            .getUnlinkedCaptured(weekStart, addDays(weekStart, 6))
+            .catch(() => ({}) as Record<DateKey, number>),
         ]);
         if (seq !== loadSeq) return;
-        set({ activities: day.activities, activitiesDate: date, entries: week, weekStart, loading: false });
+        set({ activities: day.activities, activitiesDate: date, entries: week, unlinkedByDay, weekStart, loading: false });
       } catch (err) {
         if (seq === loadSeq) set({ loading: false });
         reportError(err);
@@ -161,7 +168,7 @@ export const usePlanner = create<PlannerState>((set, get) => {
         selectedEntryIds: [],
         editingId: null,
         // Keep the week's entries while switching day inside the same week (no flicker).
-        ...(weekStart !== get().weekStart ? { entries: [], weekStart } : {}),
+        ...(weekStart !== get().weekStart ? { entries: [], unlinkedByDay: {}, weekStart } : {}),
         activities: [],
         activitiesDate: null,
         meetings: [],
