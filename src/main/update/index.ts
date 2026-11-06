@@ -6,6 +6,7 @@ import { electronTransport } from './transport';
 import { TRUSTED_UPDATE_KEYS } from './trustedKeys';
 
 declare const __UPDATE_FEED_URL__: string;
+declare const __UPDATE_MODE__: 'auto' | 'manual';
 
 export const UPDATE_APP_ID = 'dk.planner.timetracker';
 export const UPDATE_PLATFORM = 'win32-x64';
@@ -14,7 +15,7 @@ export const UPDATE_CHANNEL = 'stable';
 /**
  * Creates the updater for the installed Windows app. The feed URL is fixed at build time
  * (never read from the environment at runtime), and it is the only network endpoint
- * the application talks to.
+ * the application talks to. The manual edition (PLANNER_EDITION=manual) talks to none.
  */
 export function createUpdater(): SecureUpdater {
   return new SecureUpdater({
@@ -27,6 +28,7 @@ export function createUpdater(): SecureUpdater {
     downloadDir: join(app.getPath('temp'), 'planner-updates'),
     transport: electronTransport,
     supported: app.isPackaged && process.platform === 'win32' && process.arch === 'x64',
+    manual: __UPDATE_MODE__ === 'manual',
     launchInstaller: (path, { restart }) => {
       // electron-builder NSIS flags: silent per-user upgrade, optionally relaunching the app.
       const args = ['--updated', '/S', ...(restart ? ['--force-run'] : [])];

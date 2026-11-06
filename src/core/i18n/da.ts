@@ -370,6 +370,8 @@ export const da = {
     lastChecked: 'Sidst tjekket {time}',
     unsupported: 'Automatiske opdateringer er kun tilgængelige i den installerede Windows-app.',
     disabled: 'Opdateringer er slået fra, fordi denne udgave ikke indeholder en betroet signeringsnøgle.',
+    manual: 'Denne udgave opdateres manuelt. Hent nye versioner under Releases på github.com/MarcusSkovbaek/Planner.',
+    manualSecurity: 'Denne udgave søger aldrig efter opdateringer og har ingen forbindelse til internettet. Der sendes ingen data fra din computer.',
     security:
       'Opdateringer hentes krypteret (HTTPS) og installeres kun, hvis de er digitalt signeret af udgiveren (Ed25519), og kontrolsummen (SHA-512) stemmer. Der sendes ingen data fra din computer.',
     errors: {

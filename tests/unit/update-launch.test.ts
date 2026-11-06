@@ -22,6 +22,7 @@ vi.mock('node:child_process', async () => {
 });
 
 vi.stubGlobal('__UPDATE_FEED_URL__', 'https://example.test/update.json');
+vi.stubGlobal('__UPDATE_MODE__', 'auto');
 
 import { spawn } from 'node:child_process';
 import { createUpdater } from '../../src/main/update';

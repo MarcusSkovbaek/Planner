@@ -371,6 +371,8 @@ export const en: Dictionary = {
     lastChecked: 'Last checked {time}',
     unsupported: 'Automatic updates are only available in the installed Windows app.',
     disabled: 'Updates are disabled because this build contains no trusted signing key.',
+    manual: 'This edition is updated by hand. Download new versions under Releases on github.com/MarcusSkovbaek/Planner.',
+    manualSecurity: 'This edition never checks for updates and has no connection to the internet. No data is sent from your computer.',
     security:
       'Updates are downloaded encrypted (HTTPS) and only installed if they are digitally signed by the publisher (Ed25519) and their checksum (SHA-512) matches. No data is sent from your computer.',
     errors: {

@@ -314,6 +314,8 @@ function updateStatusText(u: UpdateStatus, t: TFunction): string {
       return t('update.unsupported');
     case 'disabled':
       return t('update.disabled');
+    case 'manual':
+      return t('update.manual');
     default:
       return '';
   }
@@ -327,7 +329,7 @@ function UpdatesSection() {
   const autoUpdate = useApp((s) => s.settings.general.autoUpdate);
   const updateSettings = useApp((s) => s.updateSettings);
   const [busy, setBusy] = useState(false);
-  const active = update.state !== 'unsupported' && update.state !== 'disabled';
+  const active = update.state !== 'unsupported' && update.state !== 'disabled' && update.state !== 'manual';
   const securityError = update.state === 'error' && SECURITY_ERRORS.has(update.error ?? '');
 
   const run = (fn: () => Promise<unknown>) => {
@@ -367,7 +369,7 @@ function UpdatesSection() {
       )}
       <div className="privacy-note subtle">
         <ShieldCheck />
-        <span>{t('update.security')}</span>
+        <span>{update.state === 'manual' ? t('update.manualSecurity') : t('update.security')}</span>
       </div>
       {info.demo && <div className="settings-footnote">{t('settings.demoMode')}</div>}
     </Section>
