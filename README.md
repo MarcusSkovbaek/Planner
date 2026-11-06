@@ -58,6 +58,12 @@ Hver udgivelse indeholder to installationsfiler, bygget fra den samme kode:
 
 Begge udgaver bruger de samme data på PC'en, så man kan skifte ved at installere den anden. Udgaven bestemmes, når appen bygges (`PLANNER_EDITION=manual`), og kan ikke ændres bagefter.
 
+### Fjern automatiske opdateringer fra ældre versioner
+
+Udgiver du en version med et **lavere** nummer end en eksisterende udgivelse (fx `v1.2.99`, når `v1.3.0` findes), bygger workflowet kun den manuelle udgave, signerer den som opdatering og gør udgivelsen til den nyeste. Installerede kopier, der er ældre end tagget, opdaterer sig én sidste gang til den manuelle udgave og går derefter aldrig på nettet igen. Kopier med det højere nummer ignorerer den, fordi den ikke er nyere, og får fortsat automatiske opdateringer.
+
+Lad udgivelsen være den nyeste, indtil alle ældre PC'er har haft Planner åbent (de søger 30 sekunder efter start og derefter hver 4. time). En ældre kopi, der først søger efter næste almindelige udgivelse, får i stedet den.
+
 ## Sikre automatiske opdateringer
 
 Nye versioner hentes og installeres automatisk i baggrunden. Brugeren skal aldrig selv downloade appen igen. Et diskret **"Opdatering klar"** i titellinjen lader brugeren genstarte med det samme. Ellers installeres opdateringen, når Planner lukkes.
