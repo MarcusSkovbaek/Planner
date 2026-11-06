@@ -47,3 +47,9 @@ jobs:
   windows:
     name: Windows
     uses: ./.github/workflows/build-windows.yml
+
+  windows-manual:
+    name: Windows (manual updates)
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      edition: manual

@@ -11,7 +11,7 @@ const INSTALLER = Buffer.from('MZ… pretend this is Planner-Setup-1.1.0.exe …
 const FEED = 'https://example.test/update.json';
 const URL = 'https://example.test/Planner-Setup-1.1.0.exe';
 
-function setup(options: { keys?: 'trusted' | 'none'; installer?: Buffer; manifest?: Record<string, unknown>; signer?: string; autoUpdate?: boolean } = {}) {
+function setup(options: { keys?: 'trusted' | 'none'; installer?: Buffer; manifest?: Record<string, unknown>; signer?: string; autoUpdate?: boolean; manual?: boolean } = {}) {
   const trusted = generateKeyPair();
   const signerPem = options.signer ?? trusted.privateKeyPem;
   const sha512 = createHash('sha512').update(INSTALLER).digest('base64');
@@ -48,6 +48,7 @@ function setup(options: { keys?: 'trusted' | 'none'; installer?: Buffer; manifes
     downloadDir,
     transport,
     supported: true,
+    manual: options.manual,
     launchInstaller,
   });
   updater.setAutoUpdate(options.autoUpdate ?? true);
@@ -55,6 +56,19 @@ function setup(options: { keys?: 'trusted' | 'none'; installer?: Buffer; manifes
 }
 
 describe('SecureUpdater', () => {
+  it('never checks, downloads or installs anything in the manual edition', async () => {
+    const { updater, transport, launchInstaller } = setup({ manual: true });
+    expect(updater.getStatus().state).toBe('manual');
+    updater.start(0, 1000);
+    expect(await updater.check()).toMatchObject({ state: 'manual' });
+    expect(await updater.install()).toBe(false);
+    expect(await updater.installOnQuit()).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(transport.fetchText).not.toHaveBeenCalled();
+    expect(transport.download).not.toHaveBeenCalled();
+    expect(launchInstaller).not.toHaveBeenCalled();
+  });
+
   it('stays disabled (fail closed) when no signing key is built in', async () => {
     const { updater, transport } = setup({ keys: 'none' });
     expect(updater.getStatus().state).toBe('disabled');

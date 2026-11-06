@@ -21,6 +21,8 @@ export default defineConfig({
   main: {
     resolve: { alias },
     define: {
+      // "manual" builds the edition without self-updates: it never contacts the network.
+      __UPDATE_MODE__: JSON.stringify(process.env.PLANNER_EDITION === 'manual' ? 'manual' : 'auto'),
       // The only network endpoint of the app. Fixed at build time; see src/main/update.
       __UPDATE_FEED_URL__: JSON.stringify(
         process.env.PLANNER_UPDATE_FEED_URL || 'https://github.com/MarcusSkovbaek/Planner/releases/latest/download/update.json',

@@ -47,6 +47,17 @@ Planner holder automatisk øje med, hvilke programmer, dokumenter, e-mails og br
 - **Den eneste netværksforbindelse er opdateringstjekket.** Det henter en offentlig, signeret fil over HTTPS og sender ingen brugerdata (ingen cookies og ingen identifikation ud over versionsnummeret).
 - Opfanget tid slettes automatisk efter 90 dage (kan ændres). Registreringer slettes aldrig automatisk.
 
+## To udgaver
+
+Hver udgivelse indeholder to installationsfiler, bygget fra den samme kode:
+
+| Fil | Opdateringer | Netværk |
+| --- | --- | --- |
+| `Planner-Setup-<version>.exe` | Henter og installerer signerede opdateringer automatisk (se nedenfor). | Kun opdateringstjek over HTTPS. |
+| `Planner-Manual-Setup-<version>.exe` | Opdaterer aldrig sig selv. Nye versioner hentes manuelt under Releases og installeres oven i den gamle. | Ingen forbindelse til internettet. |
+
+Begge udgaver bruger de samme data på PC'en, så man kan skifte ved at installere den anden. Udgaven bestemmes, når appen bygges (`PLANNER_EDITION=manual`), og kan ikke ændres bagefter.
+
 ## Sikre automatiske opdateringer
 
 Nye versioner hentes og installeres automatisk i baggrunden. Brugeren skal aldrig selv downloade appen igen. Et diskret **"Opdatering klar"** i titellinjen lader brugeren genstarte med det samme. Ellers installeres opdateringen, når Planner lukkes.

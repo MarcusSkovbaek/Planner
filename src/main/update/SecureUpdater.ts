@@ -24,6 +24,8 @@ export interface SecureUpdaterOptions {
   launchInstaller(path: string, options: { restart: boolean }): void;
   /** False in development builds and on unsupported platforms. */
   supported: boolean;
+  /** The edition without self-updates: never checks, downloads or installs anything. */
+  manual?: boolean;
   clock?: () => number;
 }
 
@@ -63,7 +65,7 @@ export class SecureUpdater {
   constructor(private readonly options: SecureUpdaterOptions) {
     this.clock = options.clock ?? Date.now;
     this.status = {
-      state: !options.supported ? 'unsupported' : options.trustedKeys.length ? 'idle' : 'disabled',
+      state: options.manual ? 'manual' : !options.supported ? 'unsupported' : options.trustedKeys.length ? 'idle' : 'disabled',
       currentVersion: options.currentVersion,
     };
   }
@@ -124,6 +126,7 @@ export class SecureUpdater {
    * Returns false (and changes nothing) if no verified update is ready.
    */
   async install(restart = true): Promise<boolean> {
+    if (!this.isActive()) return false;
     if (this.status.state === 'available') await this.download();
     if (this.status.state !== 'ready' || !this.readyFile || !this.manifest) return false;
     try {
@@ -148,7 +151,7 @@ export class SecureUpdater {
   }
 
   private isActive(): boolean {
-    return this.status.state !== 'unsupported' && this.status.state !== 'disabled';
+    return this.status.state !== 'unsupported' && this.status.state !== 'disabled' && this.status.state !== 'manual';
   }
 
   private async run(): Promise<UpdateStatus> {

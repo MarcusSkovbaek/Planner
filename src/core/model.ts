@@ -214,6 +214,8 @@ export interface DayMeetings {
 export type UpdateState =
   | 'unsupported'
   | 'disabled'
+  /** The edition without self-updates: new versions are installed by hand. */
+  | 'manual'
   | 'idle'
   | 'checking'
   | 'up-to-date'

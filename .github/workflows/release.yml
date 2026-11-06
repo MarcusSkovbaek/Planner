@@ -55,9 +55,18 @@ jobs:
       npm-cache: false
       version: ${{ needs.verify.outputs.version }}
 
+  build-manual:
+    name: Windows (manual updates)
+    needs: verify
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      npm-cache: false
+      version: ${{ needs.verify.outputs.version }}
+      edition: manual
+
   publish:
     name: Sign and publish
-    needs: [verify, build]
+    needs: [verify, build, build-manual]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # PLANNER_UPDATE_SIGNING_KEY is a secret of this environment. Protect it with required
@@ -81,6 +90,10 @@ jobs:
         with:
           name: Planner-Windows-installer
           path: release
+      - uses: actions/download-artifact@v8
+        with:
+          name: Planner-Windows-installer-manual
+          path: release
       - name: Sign the update (refuses keys the app does not trust)
         env:
           PLANNER_UPDATE_SIGNING_KEY: ${{ secrets.PLANNER_UPDATE_SIGNING_KEY }}
@@ -97,11 +110,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           installer="release/Planner-Setup-$VERSION.exe"
+          # The manual edition is not signed into update.json: it never updates itself.
+          manual="release/Planner-Manual-Setup-$VERSION.exe"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release upload "$TAG" "$installer" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$TAG" "$installer" "$manual" --repo "$GITHUB_REPOSITORY" --clobber
             gh release upload "$TAG" release/update.json --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" "$installer" release/update.json \
+            gh release create "$TAG" "$installer" "$manual" release/update.json \
               --repo "$GITHUB_REPOSITORY" \
               --verify-tag \
               --title "Planner $VERSION" \

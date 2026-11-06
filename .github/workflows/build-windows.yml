@@ -14,6 +14,10 @@ on:
         description: App version for this build only (e.g. 1.2.0), taken from the release tag. Empty keeps package.json's version.
         type: string
         default: ''
+      edition:
+        description: "auto: updates itself through signed releases. manual: no self-updates and no network at all; installed by hand."
+        type: string
+        default: auto
 
 permissions:
   contents: read
@@ -23,7 +27,16 @@ jobs:
     name: Installer & smoke test
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      PLANNER_EDITION: ${{ inputs.edition }}
     steps:
+      - name: Check edition
+        shell: bash
+        run: |
+          if [[ "$PLANNER_EDITION" != auto && "$PLANNER_EDITION" != manual ]]; then
+            echo "::error::Unknown edition '$PLANNER_EDITION' (expected auto or manual)"
+            exit 1
+          fi
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -51,8 +64,16 @@ jobs:
           npm pkg set version="$VERSION"
           echo "Building Planner $(node -p "require('./package.json').version")"
       - run: npm run build
+      # PLANNER_EDITION (job env) decides whether the app can update itself; the manual
+      # edition gets its own installer name so both can sit on the same release.
       - name: Package installer
-        run: npx electron-builder --win --x64 --publish never
+        shell: bash
+        run: |
+          if [[ "$PLANNER_EDITION" == manual ]]; then
+            npx electron-builder --win --x64 --publish never '-c.win.artifactName=Planner-Manual-Setup-${version}.${ext}'
+          else
+            npx electron-builder --win --x64 --publish never
+          fi
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: Smoke test the packaged app (native Win32 capture, storage, IPC, UI)
@@ -66,9 +87,11 @@ jobs:
           if ($r.provider -ne 'win32') { throw "Expected the native Win32 provider, got '$($r.provider)'" }
           if (-not $r.networkBlocked) { throw 'The user interface could reach the internet' }
           if (-not $r.networkControlReachable) { Write-Warning 'Network control probe failed; the block could not be cross-checked' }
+          $expected = if ($env:PLANNER_EDITION -eq 'manual') { 'manual' } else { 'idle' }
+          if ($r.updateState -ne $expected) { throw "Expected update state '$expected', got '$($r.updateState)'" }
       - uses: actions/upload-artifact@v7
         with:
-          name: Planner-Windows-installer
-          path: release/Planner-Setup-*.exe
+          name: ${{ inputs.edition == 'manual' && 'Planner-Windows-installer-manual' || 'Planner-Windows-installer' }}
+          path: ${{ inputs.edition == 'manual' && 'release/Planner-Manual-Setup-*.exe' || 'release/Planner-Setup-*.exe' }}
           if-no-files-found: error
           retention-days: 30
