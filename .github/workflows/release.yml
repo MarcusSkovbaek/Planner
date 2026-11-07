@@ -10,6 +10,11 @@ name: Release
 # run in the protected `release` environment. That job installs no npm packages; besides
 # GitHub's own checkout/setup/download actions it runs only this repository's signing
 # script, which uses Node built-ins only.
+#
+# Retiring old versions: a tag LOWER than an existing release (e.g. v1.2.99 after v1.3.0)
+# publishes only the manual edition, signs it into update.json and makes that release
+# "latest". Installed copies older than that tag update to it once and then never contact
+# the network again; copies at the higher version ignore it, because it is not newer.
 on:
   push:
     tags: ['v*.*.*']
@@ -24,6 +29,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       version: ${{ steps.tag.outputs.version }}
+      retire: ${{ steps.retire.outputs.retire }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -40,6 +46,20 @@ jobs:
             exit 1
           fi
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Retire older versions if the tag is lower than an existing release
+        id: retire
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          highest="$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY.git" \
+            | sed -n 's#.*refs/tags/v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$#\1#p' \
+            | grep -vx "${TAG#v}" | sort -V | tail -n 1)"
+          if [ -n "$highest" ] && [ "$(printf '%s\n%s\n' "${TAG#v}" "$highest" | sort -V | tail -n 1)" = "$highest" ]; then
+            echo "::notice::$TAG is lower than v$highest: publishing the manual edition only, to move installed versions below $TAG off automatic updates."
+            echo "retire=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "retire=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: The app must trust an update key
         run: |
           if ! grep -Eq "id: '[0-9a-f]{16}'" src/main/update/trustedKeys.ts; then
@@ -50,6 +70,7 @@ jobs:
   build:
     name: Windows
     needs: verify
+    if: needs.verify.outputs.retire != 'true'
     uses: ./.github/workflows/build-windows.yml
     with:
       npm-cache: false
@@ -67,6 +88,10 @@ jobs:
   publish:
     name: Sign and publish
     needs: [verify, build, build-manual]
+    # The self-updating build is skipped when retiring older versions.
+    if: >-
+      always() && needs.verify.result == 'success' && needs.build-manual.result == 'success' &&
+      (needs.build.result == 'success' || (needs.build.result == 'skipped' && needs.verify.outputs.retire == 'true'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # PLANNER_UPDATE_SIGNING_KEY is a secret of this environment. Protect it with required
@@ -77,6 +102,7 @@ jobs:
     env:
       TAG: ${{ github.ref_name }}
       VERSION: ${{ needs.verify.outputs.version }}
+      RETIRE: ${{ needs.verify.outputs.retire }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -87,6 +113,7 @@ jobs:
           package-manager-cache: false
       # Fails if the file differs from what the build job uploaded.
       - uses: actions/download-artifact@v8
+        if: needs.verify.outputs.retire != 'true'
         with:
           name: Planner-Windows-installer
           path: release
@@ -98,8 +125,11 @@ jobs:
         env:
           PLANNER_UPDATE_SIGNING_KEY: ${{ secrets.PLANNER_UPDATE_SIGNING_KEY }}
         run: |
+          # When retiring, the signed update is the manual edition: it is the last update
+          # those copies ever install.
+          if [ "$RETIRE" = true ]; then signed="release/Planner-Manual-Setup-$VERSION.exe"; else signed="release/Planner-Setup-$VERSION.exe"; fi
           node scripts/sign-update.mjs \
-            --installer "release/Planner-Setup-$VERSION.exe" \
+            --installer "$signed" \
             --version "$VERSION" \
             --base-url "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
       # A release made in the web UI already exists (without files): add the files to it.
@@ -109,16 +139,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          installer="release/Planner-Setup-$VERSION.exe"
-          # The manual edition is not signed into update.json: it never updates itself.
           manual="release/Planner-Manual-Setup-$VERSION.exe"
+          if [ "$RETIRE" = true ]; then files=("$manual"); else files=("release/Planner-Setup-$VERSION.exe" "$manual"); fi
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release upload "$TAG" "$installer" "$manual" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
             gh release upload "$TAG" release/update.json --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" "$installer" "$manual" release/update.json \
+            gh release create "$TAG" "${files[@]}" release/update.json \
               --repo "$GITHUB_REPOSITORY" \
               --verify-tag \
               --title "Planner $VERSION" \
               --generate-notes
           fi
+      # Installed copies read releases/latest, so the retiring release must be the latest one,
+      # even though a higher version exists.
+      - name: Make the retiring release the latest one
+        if: needs.verify.outputs.retire == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --latest
